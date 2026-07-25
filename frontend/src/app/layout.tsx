@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "HARA",
-  description: "Şəhərdə nə baş verir?",
+  title: "Hara — Bu həftə nə var?",
+  description: "Şəhərdəki tədbirləri kəşf et.",
 };
 
 export default function RootLayout({
