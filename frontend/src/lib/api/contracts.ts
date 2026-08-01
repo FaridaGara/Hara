@@ -27,6 +27,30 @@ export type HaraEvent = {
   is_featured: boolean;
 };
 
+export type TicketSalesStatus =
+  | "UPCOMING"
+  | "AVAILABLE"
+  | "SOLD_OUT"
+  | "ENDED";
+
+export type PublicTicketType = {
+  id: number;
+  name: string;
+  price: string;
+  currency: "AZN";
+  available_quantity: number;
+  sales_start_at: string | null;
+  sales_end_at: string | null;
+  min_quantity: number;
+  max_quantity: number;
+  sales_status: TicketSalesStatus;
+  is_available: boolean;
+};
+
+export type HaraEventDetail = HaraEvent & {
+  ticket_types: PublicTicketType[];
+};
+
 export type AuthTokenPair = {
   access: string;
   refresh: string;

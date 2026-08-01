@@ -1,6 +1,6 @@
-import type { HaraEvent, Order, Payment, Ticket } from "@/lib/api";
+import type { HaraEventDetail, Order, Payment, Ticket } from "@/lib/api";
 
-export const eventFixture: HaraEvent = {
+export const eventFixture: HaraEventDetail = {
   id: "10000000-0000-4000-8000-000000000001",
   title: "Bakı Caz Axşamı",
   slug: "baki-caz-axsami",
@@ -19,6 +19,21 @@ export const eventFixture: HaraEvent = {
   end_at: "2026-08-10T20:00:00Z",
   status: "published",
   is_featured: true,
+  ticket_types: [
+    {
+      id: 12,
+      name: "Standard",
+      price: "20.00",
+      currency: "AZN",
+      available_quantity: 8,
+      sales_start_at: null,
+      sales_end_at: null,
+      min_quantity: 1,
+      max_quantity: 8,
+      sales_status: "AVAILABLE",
+      is_available: true,
+    },
+  ],
 };
 
 export function orderFixture(overrides: Partial<Order> = {}): Order {

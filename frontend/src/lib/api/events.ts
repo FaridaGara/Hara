@@ -1,5 +1,9 @@
 import { apiRequest } from "./client";
-import type { EventListFilters, HaraEvent } from "./contracts";
+import type {
+  EventListFilters,
+  HaraEvent,
+  HaraEventDetail,
+} from "./contracts";
 
 function eventListQuery(filters: EventListFilters) {
   const query = new URLSearchParams();
@@ -25,7 +29,7 @@ export const eventsApi = {
   },
 
   detail(slug: string, signal?: AbortSignal) {
-    return apiRequest<HaraEvent>(`/api/events/${encodeURIComponent(slug)}/`, {
+    return apiRequest<HaraEventDetail>(`/api/events/${encodeURIComponent(slug)}/`, {
       auth: "none",
       signal,
     });

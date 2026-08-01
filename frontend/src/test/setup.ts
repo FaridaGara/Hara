@@ -9,6 +9,7 @@ afterEach(() => {
   cleanup();
   resetApiClientForTests();
   resetSessionForTests();
+  window.sessionStorage.clear();
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
