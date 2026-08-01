@@ -1,8 +1,10 @@
-from datetime import timedelta
+import uuid
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.contrib.gis.geos import Point
+from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -11,7 +13,6 @@ from rest_framework.test import APITestCase
 from ticketing.models import Order, OrderItem, Ticket, TicketType
 
 from .models import Category, Event, Venue
-from django.test import TestCase
 
 
 class EventAPITests(TestCase):
@@ -121,6 +122,419 @@ class EventAPITests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.json()), 1)
         self.assertTrue(response.json()[0]["is_featured"])
+
+
+class PublicEventTicketTypeContractTests(APITestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.organizer = get_user_model().objects.create_user(
+            email="public-contract-organizer@hara.today",
+            password="StrongPass123!",
+            account_type="organizer",
+        )
+        cls.buyer = get_user_model().objects.create_user(
+            email="public-contract-buyer@hara.today",
+            password="StrongPass123!",
+            account_type="attendee",
+        )
+        cls.category = Category.objects.create(
+            name="Public Contract",
+            slug="public-contract",
+        )
+        cls.venue = Venue.objects.create(
+            name="Public Contract Məkanı",
+            city="Bakı",
+            address="Public contract ünvanı",
+            location=Point(49.84, 40.37, srid=4326),
+        )
+        now = timezone.now()
+        cls.event = Event.objects.create(
+            organizer=cls.organizer,
+            category=cls.category,
+            venue=cls.venue,
+            title="Public Purchasing Event",
+            description="Attendee purchasing contract",
+            start_at=now + timedelta(days=20),
+            end_at=now + timedelta(days=20, hours=2),
+            status=Event.Status.PUBLISHED,
+        )
+        cls.ticket_type = TicketType.objects.create(
+            event=cls.event,
+            name="Standard",
+            price=Decimal("20.00"),
+            capacity=10,
+            max_per_order=4,
+            sales_start_at=now - timedelta(days=1),
+            sales_end_at=now + timedelta(days=10),
+            is_active=True,
+        )
+        cls.draft_event = Event.objects.create(
+            organizer=cls.organizer,
+            category=cls.category,
+            venue=cls.venue,
+            title="Draft Purchasing Event",
+            description="Public görünməməlidir",
+            start_at=now + timedelta(days=20),
+            end_at=now + timedelta(days=20, hours=2),
+            status=Event.Status.DRAFT,
+        )
+        cls.draft_ticket_type = TicketType.objects.create(
+            event=cls.draft_event,
+            name="Draft Standard",
+            price=Decimal("15.00"),
+            capacity=10,
+            max_per_order=2,
+            is_active=True,
+        )
+
+    def detail_url(self, event=None):
+        return reverse(
+            "events:event-detail",
+            kwargs={"slug": (event or self.event).slug},
+        )
+
+    def create_order_item(
+        self,
+        *,
+        quantity,
+        status=Order.Status.PENDING,
+        expires_at=None,
+        ticket_type=None,
+    ):
+        ticket_type = ticket_type or self.ticket_type
+        order = Order.objects.create(
+            buyer=self.buyer,
+            status=status,
+            total_amount=ticket_type.price * quantity,
+            currency="AZN",
+            expires_at=expires_at,
+            paid_at=(
+                timezone.now()
+                if status == Order.Status.PAID
+                else None
+            ),
+        )
+        OrderItem.objects.create(
+            order=order,
+            ticket_type=ticket_type,
+            quantity=quantity,
+            unit_price=ticket_type.price,
+        )
+        return order
+
+    def public_ticket_data(self):
+        response = self.client.get(self.detail_url())
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return next(
+            item
+            for item in response.json()["ticket_types"]
+            if item["id"] == self.ticket_type.id
+        )
+
+    def test_public_detail_returns_safe_ticket_type_contract(self):
+        inactive = TicketType.objects.create(
+            event=self.event,
+            name="Inactive",
+            price=Decimal("99.00"),
+            capacity=3,
+            max_per_order=1,
+            is_active=False,
+        )
+
+        response = self.client.get(self.detail_url())
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response_data = response.json()
+        uuid.UUID(response_data["id"])
+        ticket_types = response_data["ticket_types"]
+        self.assertEqual(
+            [item["id"] for item in ticket_types],
+            [self.ticket_type.id],
+        )
+        self.assertNotIn(
+            inactive.id,
+            {item["id"] for item in ticket_types},
+        )
+        ticket_data = ticket_types[0]
+        self.assertEqual(
+            set(ticket_data),
+            {
+                "id",
+                "name",
+                "price",
+                "currency",
+                "available_quantity",
+                "sales_start_at",
+                "sales_end_at",
+                "min_quantity",
+                "max_quantity",
+                "sales_status",
+                "is_available",
+            },
+        )
+        self.assertIsInstance(ticket_data["price"], str)
+        self.assertEqual(ticket_data["price"], "20.00")
+        self.assertEqual(ticket_data["currency"], "AZN")
+        self.assertEqual(ticket_data["min_quantity"], 1)
+        self.assertEqual(ticket_data["max_quantity"], 4)
+        self.assertEqual(ticket_data["sales_status"], "AVAILABLE")
+        self.assertTrue(ticket_data["is_available"])
+
+        for field in ["sales_start_at", "sales_end_at"]:
+            parsed = datetime.fromisoformat(
+                ticket_data[field].replace("Z", "+00:00")
+            )
+            self.assertTrue(timezone.is_aware(parsed))
+
+        serialized = str(ticket_data)
+        for organizer_only_field in [
+            "capacity",
+            "max_per_order",
+            "is_active",
+            "created_at",
+            "updated_at",
+            "reserved_quantity",
+            "sold_quantity",
+        ]:
+            self.assertNotIn(organizer_only_field, serialized)
+
+    def test_draft_event_and_its_ticket_types_are_not_public(self):
+        response = self.client.get(
+            self.detail_url(self.draft_event)
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+        serialized = str(response.json())
+        self.assertNotIn(self.draft_ticket_type.name, serialized)
+
+    def test_sales_status_upcoming_boundary(self):
+        self.ticket_type.sales_start_at = (
+            timezone.now() + timedelta(hours=1)
+        )
+        self.ticket_type.save(update_fields=["sales_start_at"])
+
+        ticket_data = self.public_ticket_data()
+
+        self.assertEqual(ticket_data["sales_status"], "UPCOMING")
+        self.assertFalse(ticket_data["is_available"])
+
+    def test_sales_status_available(self):
+        ticket_data = self.public_ticket_data()
+
+        self.assertEqual(ticket_data["sales_status"], "AVAILABLE")
+        self.assertTrue(ticket_data["is_available"])
+
+    def test_sales_status_sold_out(self):
+        self.create_order_item(
+            quantity=self.ticket_type.capacity,
+            status=Order.Status.PAID,
+        )
+
+        ticket_data = self.public_ticket_data()
+
+        self.assertEqual(ticket_data["available_quantity"], 0)
+        self.assertEqual(ticket_data["max_quantity"], 0)
+        self.assertEqual(ticket_data["sales_status"], "SOLD_OUT")
+        self.assertFalse(ticket_data["is_available"])
+
+    def test_sales_status_ended_boundary(self):
+        self.ticket_type.sales_end_at = timezone.now()
+        self.ticket_type.save(update_fields=["sales_end_at"])
+
+        ticket_data = self.public_ticket_data()
+
+        self.assertEqual(ticket_data["sales_status"], "ENDED")
+        self.assertFalse(ticket_data["is_available"])
+
+    def test_availability_reuses_active_reservation_and_paid_rules(self):
+        now = timezone.now()
+        self.create_order_item(
+            quantity=2,
+            expires_at=now + timedelta(minutes=5),
+        )
+        self.create_order_item(
+            quantity=3,
+            expires_at=now - timedelta(seconds=1),
+        )
+        self.create_order_item(
+            quantity=4,
+            status=Order.Status.PAID,
+        )
+
+        ticket_data = self.public_ticket_data()
+
+        self.assertEqual(ticket_data["available_quantity"], 4)
+        self.assertEqual(ticket_data["max_quantity"], 4)
+
+    def test_availability_is_never_negative(self):
+        self.create_order_item(
+            quantity=self.ticket_type.capacity + 1,
+            status=Order.Status.PAID,
+        )
+
+        ticket_data = self.public_ticket_data()
+
+        self.assertEqual(ticket_data["available_quantity"], 0)
+        self.assertEqual(ticket_data["sales_status"], "SOLD_OUT")
+
+    def test_public_ticket_type_id_creates_server_priced_order(self):
+        ticket_data = self.public_ticket_data()
+        self.client.force_authenticate(user=self.buyer)
+
+        response = self.client.post(
+            reverse("order-create"),
+            {
+                "items": [
+                    {
+                        "ticket_type_id": ticket_data["id"],
+                        "quantity": 2,
+                        "price": "0.01",
+                        "currency": "USD",
+                    }
+                ],
+                "total_amount": "0.01",
+                "currency": "USD",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_201_CREATED,
+        )
+        order = Order.objects.get(pk=response.json()["id"])
+        self.assertEqual(order.total_amount, Decimal("40.00"))
+        self.assertEqual(order.currency, "AZN")
+        self.assertEqual(
+            response.json()["items"][0]["ticket_type_id"],
+            ticket_data["id"],
+        )
+
+    def test_mixed_event_ticket_types_are_rejected(self):
+        other_event = Event.objects.create(
+            organizer=self.organizer,
+            category=self.category,
+            venue=self.venue,
+            title="Other Public Event",
+            description="Başqa event",
+            start_at=self.event.start_at,
+            end_at=self.event.end_at,
+            status=Event.Status.PUBLISHED,
+        )
+        other_ticket_type = TicketType.objects.create(
+            event=other_event,
+            name="Other Standard",
+            price=Decimal("10.00"),
+            capacity=10,
+            max_per_order=2,
+            is_active=True,
+        )
+        self.client.force_authenticate(user=self.buyer)
+
+        response = self.client.post(
+            reverse("order-create"),
+            {
+                "items": [
+                    {
+                        "ticket_type_id": self.ticket_type.id,
+                        "quantity": 1,
+                    },
+                    {
+                        "ticket_type_id": other_ticket_type.id,
+                        "quantity": 1,
+                    },
+                ]
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+        self.assertEqual(Order.objects.count(), 0)
+
+    def test_non_public_inactive_and_outside_window_orders_are_blocked(
+        self,
+    ):
+        inactive = TicketType.objects.create(
+            event=self.event,
+            name="Inactive Order",
+            price=Decimal("10.00"),
+            capacity=10,
+            max_per_order=2,
+            is_active=False,
+        )
+        upcoming = TicketType.objects.create(
+            event=self.event,
+            name="Upcoming Order",
+            price=Decimal("10.00"),
+            capacity=10,
+            max_per_order=2,
+            sales_start_at=timezone.now() + timedelta(days=1),
+            is_active=True,
+        )
+        self.client.force_authenticate(user=self.buyer)
+
+        for ticket_type in [
+            self.draft_ticket_type,
+            inactive,
+            upcoming,
+        ]:
+            with self.subTest(ticket_type=ticket_type.name):
+                response = self.client.post(
+                    reverse("order-create"),
+                    {
+                        "items": [
+                            {
+                                "ticket_type_id": ticket_type.id,
+                                "quantity": 1,
+                            }
+                        ]
+                    },
+                    format="json",
+                )
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_409_CONFLICT,
+                )
+
+        self.assertEqual(Order.objects.count(), 0)
+
+    def test_public_sold_out_type_preserves_capacity_409_contract(self):
+        self.create_order_item(
+            quantity=self.ticket_type.capacity,
+            status=Order.Status.PAID,
+        )
+        ticket_data = self.public_ticket_data()
+        self.client.force_authenticate(user=self.buyer)
+
+        response = self.client.post(
+            reverse("order-create"),
+            {
+                "items": [
+                    {
+                        "ticket_type_id": ticket_data["id"],
+                        "quantity": 1,
+                    }
+                ]
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_409_CONFLICT,
+        )
+        self.assertEqual(
+            response.json()["code"],
+            "INSUFFICIENT_CAPACITY",
+        )
+        self.assertEqual(response.json()["available_quantity"], 0)
+
 
 User = get_user_model()
 

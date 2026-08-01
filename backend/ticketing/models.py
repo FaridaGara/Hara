@@ -103,6 +103,32 @@ class OrderItem(models.Model):
         return f"{self.ticket_type.name} × {self.quantity}"
 
 
+class OrderIdempotencyKey(models.Model):
+    buyer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="order_idempotency_keys",
+    )
+    key = models.CharField(max_length=255)
+    request_fingerprint = models.CharField(max_length=64)
+    order = models.OneToOneField(
+        Order,
+        on_delete=models.PROTECT,
+        related_name="idempotency_key",
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["buyer", "key"],
+                name="ticketing_unique_order_idempotency_key",
+            ),
+        ]
+
+
 class Payment(models.Model):
     class Status(models.TextChoices):
         INITIATED = "initiated", "Initiated"
@@ -232,6 +258,13 @@ class Ticket(models.Model):
     )
     issued_at = models.DateTimeField(auto_now_add=True)
     used_at = models.DateTimeField(null=True, blank=True)
+    checked_in_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="checked_in_tickets",
+        null=True,
+        blank=True,
+    )
 
     def __str__(self):
         return f"{self.event.title} — {self.id}"

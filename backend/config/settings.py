@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'django.contrib.gis',
     'corsheaders',
     'rest_framework',
+    'drf_spectacular',
     'apps.users.apps.UsersConfig',
     'apps.core',
 ]
@@ -149,11 +150,42 @@ PAYMENT_WEBHOOK_SECRET = os.getenv(
     "PAYMENT_WEBHOOK_SECRET",
     "",
 )
+ORDER_RESERVATION_MINUTES = int(
+    os.getenv("ORDER_RESERVATION_MINUTES", "15")
+)
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
+    "DEFAULT_SCHEMA_CLASS": (
+        "drf_spectacular.openapi.AutoSchema"
+    ),
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "HARA API",
+    "DESCRIPTION": (
+        "HARA event discovery, ordering, payment, ticket and "
+        "organizer operations API."
+    ),
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
+    "ENUM_NAME_OVERRIDES": {
+        "EventStatusEnum": "events.models.Event.Status",
+        "OrderStatusEnum": "ticketing.models.Order.Status",
+        "PaymentStatusEnum": "ticketing.models.Payment.Status",
+        "TicketStatusEnum": "ticketing.models.Ticket.Status",
+        "TicketSalesStatusEnum": (
+            "ticketing.sales.TicketSalesStatus"
+        ),
+        "WebhookOutcomeStatusEnum": [
+            "processed",
+            "duplicate",
+            "ignored",
+        ],
+    },
 }
 
 

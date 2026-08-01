@@ -1,3 +1,14 @@
+import unittest
+
+from django.apps import apps
+
+
+if not apps.is_installed("apps.accounts"):
+    raise unittest.SkipTest(
+        "Legacy apps.accounts is not installed; apps.users is authoritative."
+    )
+
+
 from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.core.exceptions import FieldDoesNotExist

@@ -1,9 +1,11 @@
-from rest_framework.filters import OrderingFilter, SearchFilter
-from rest_framework.generics import ListAPIView, RetrieveAPIView
-from rest_framework.permissions import AllowAny
-
-from .models import Event
-from .serializers import EventSerializer
+from django.db.models import Prefetch
+from django.utils import timezone
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    OpenApiResponse,
+    extend_schema,
+    extend_schema_view,
+)
 from rest_framework import status
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.generics import (
@@ -15,12 +17,44 @@ from rest_framework.generics import (
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from ticketing.inventory import annotate_inventory
+from ticketing.models import TicketType
 
 from .models import Event
 from .permissions import IsOrganizer
-from .serializers import EventSerializer, OrganizerEventSerializer
+from .serializers import (
+    EventDetailSerializer,
+    EventSerializer,
+    OrganizerEventSerializer,
+)
 
 
+@extend_schema_view(
+    get=extend_schema(
+        operation_id="event_list",
+        auth=[],
+        description="Published events. No authentication is required.",
+        parameters=[
+            OpenApiParameter(
+                "category",
+                str,
+                description="Category slug.",
+            ),
+            OpenApiParameter(
+                "city",
+                str,
+                description="Case-insensitive venue city.",
+            ),
+            OpenApiParameter(
+                "featured",
+                str,
+                enum=["true", "false"],
+                description="Filter by featured status.",
+            ),
+        ],
+        responses={200: EventSerializer(many=True)},
+    )
+)
 class EventListAPIView(ListAPIView):
     serializer_class = EventSerializer
     permission_classes = [AllowAny]
@@ -63,12 +97,43 @@ class EventListAPIView(ListAPIView):
         return queryset
 
 
+@extend_schema_view(
+    get=extend_schema(
+        operation_id="event_detail",
+        auth=[],
+        description="Published event detail. Draft events return 404.",
+        responses={
+            200: EventDetailSerializer,
+            404: OpenApiResponse(description="Event not found."),
+        },
+    )
+)
 class EventDetailAPIView(RetrieveAPIView):
-    serializer_class = EventSerializer
+    serializer_class = EventDetailSerializer
     permission_classes = [AllowAny]
     lookup_field = "slug"
 
+    def get_ticket_contract_now(self):
+        if not hasattr(self, "_ticket_contract_now"):
+            self._ticket_contract_now = timezone.now()
+
+        return self._ticket_contract_now
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["ticket_contract_now"] = (
+            self.get_ticket_contract_now()
+        )
+        return context
+
     def get_queryset(self):
+        ticket_types = annotate_inventory(
+            TicketType.objects
+            .filter(is_active=True)
+            .select_related("event")
+            .order_by("price", "id"),
+            now=self.get_ticket_contract_now(),
+        )
         return (
             Event.objects
             .filter(
@@ -77,7 +142,26 @@ class EventDetailAPIView(RetrieveAPIView):
                 venue__is_active=True,
             )
             .select_related("category", "venue", "organizer")
+            .prefetch_related(
+                Prefetch(
+                    "ticket_types",
+                    queryset=ticket_types,
+                    to_attr="public_ticket_types",
+                )
+            )
         )
+
+
+@extend_schema_view(
+    get=extend_schema(
+        operation_id="organizer_event_list",
+        description="Events owned by the authenticated organizer.",
+    ),
+    post=extend_schema(
+        operation_id="organizer_event_create",
+        description="Create an event owned by the authenticated organizer.",
+    ),
+)
 class OrganizerEventListCreateAPIView(ListCreateAPIView):
     serializer_class = OrganizerEventSerializer
     permission_classes = [IsOrganizer]
@@ -98,6 +182,42 @@ class OrganizerEventListCreateAPIView(ListCreateAPIView):
         serializer.save(organizer=self.request.user)
 
 
+@extend_schema_view(
+    get=extend_schema(
+        operation_id="organizer_event_detail",
+        description=(
+            "Organizer-owned event detail. Another organizer's event "
+            "returns 404."
+        ),
+    ),
+    put=extend_schema(
+        operation_id="organizer_event_update",
+        responses={
+            200: OrganizerEventSerializer,
+            409: OpenApiResponse(
+                description="Ticketed event is lifecycle-locked."
+            ),
+        },
+    ),
+    patch=extend_schema(
+        operation_id="organizer_event_partial_update",
+        responses={
+            200: OrganizerEventSerializer,
+            409: OpenApiResponse(
+                description="Ticketed event is lifecycle-locked."
+            ),
+        },
+    ),
+    delete=extend_schema(
+        operation_id="organizer_event_delete",
+        responses={
+            204: None,
+            409: OpenApiResponse(
+                description="Ticketed event cannot be deleted."
+            ),
+        },
+    ),
+)
 class OrganizerEventDetailAPIView(RetrieveUpdateDestroyAPIView):
     serializer_class = OrganizerEventSerializer
     permission_classes = [IsOrganizer]

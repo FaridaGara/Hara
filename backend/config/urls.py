@@ -16,6 +16,10 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import include, path
+from drf_spectacular.views import (
+    SpectacularAPIView,
+    SpectacularSwaggerView,
+)
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
@@ -28,16 +32,30 @@ from ticketing.views import (
     OrderCancelAPIView,
     OrderCreateAPIView,
     OrderDetailAPIView,
+    OrganizerTicketCheckInAPIView,
     OrganizerTicketTypeDetailAPIView,
     OrganizerTicketTypeListCreateAPIView,
     PaymentInitiateAPIView,
     SandboxPaymentCompleteAPIView,
     SandboxPaymentWebhookAPIView,
+    TicketDetailAPIView,
+    TicketListAPIView,
 )
 
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path(
+        "api/schema/",
+        SpectacularAPIView.as_view(),
+        name="api-schema",
+    ),
+    path(
+        "api/docs/",
+        SpectacularSwaggerView.as_view(url_name="api-schema"),
+        name="api-docs",
+    ),
+    path("api/", include("apps.core.urls")),
     path("api/events/", include("events.urls")),
     path(
         "api/auth/login/",
@@ -68,6 +86,21 @@ urlpatterns = [
         "api/organizer/events/<slug:event_slug>/ticket-types/<int:pk>/",
         OrganizerTicketTypeDetailAPIView.as_view(),
         name="organizer-ticket-type-detail",
+    ),
+    path(
+        "api/organizer/events/<slug:event_slug>/check-ins/",
+        OrganizerTicketCheckInAPIView.as_view(),
+        name="organizer-ticket-check-in",
+    ),
+    path(
+        "api/tickets/",
+        TicketListAPIView.as_view(),
+        name="ticket-list",
+    ),
+    path(
+        "api/tickets/<uuid:ticket_id>/",
+        TicketDetailAPIView.as_view(),
+        name="ticket-detail",
     ),
     path(
         "api/orders/",

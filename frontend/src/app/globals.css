@@ -3,6 +3,7 @@
 :root {
   --background: #09090e;
   --foreground: #ffffff;
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -18,9 +19,30 @@ body {
   min-width: 320px;
 }
 
+* {
+  box-sizing: border-box;
+}
+
 button,
 input {
   font: inherit;
+}
+
+a,
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .scrollbar-none {
@@ -29,4 +51,24 @@ input {
 
 .scrollbar-none::-webkit-scrollbar {
   display: none;
+}
+
+@keyframes event-gradient-shift {
+  from { transform: translateX(0); }
+  to { transform: translateX(33.333%); }
+}
+
+.event-gradient {
+  animation: event-gradient-shift 8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from ticketing.serializers import PublicTicketTypeSerializer
+
 from .models import Category, Event, Venue
 
 
@@ -24,10 +26,10 @@ class VenueSerializer(serializers.ModelSerializer):
             "longitude",
         )
 
-    def get_latitude(self, obj):
+    def get_latitude(self, obj) -> float | None:
         return obj.location.y if obj.location else None
 
-    def get_longitude(self, obj):
+    def get_longitude(self, obj) -> float | None:
         return obj.location.x if obj.location else None
 
 
@@ -50,6 +52,18 @@ class EventSerializer(serializers.ModelSerializer):
             "status",
             "is_featured",
         )
+
+
+class EventDetailSerializer(EventSerializer):
+    ticket_types = PublicTicketTypeSerializer(
+        source="public_ticket_types",
+        many=True,
+        read_only=True,
+    )
+
+    class Meta(EventSerializer.Meta):
+        fields = EventSerializer.Meta.fields + ("ticket_types",)
+
 
 class OrganizerEventSerializer(serializers.ModelSerializer):
     category_id = serializers.PrimaryKeyRelatedField(

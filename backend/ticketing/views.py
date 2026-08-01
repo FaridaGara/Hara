@@ -1,14 +1,20 @@
 import hashlib
 import hmac
-from datetime import timedelta
-from decimal import Decimal
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Prefetch, Q, Sum
+from django.db.models import Prefetch
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from drf_spectacular.utils import (
+    OpenApiExample,
+    OpenApiParameter,
+    OpenApiResponse,
+    OpenApiTypes,
+    extend_schema,
+    extend_schema_view,
+)
 from rest_framework import status
 from rest_framework.generics import (
     ListCreateAPIView,
@@ -21,7 +27,19 @@ from rest_framework.views import APIView
 from events.models import Event
 from events.permissions import IsOrganizer
 
-from .models import Order, OrderItem, Payment, TicketType
+from .checkins.services import (
+    TicketCheckInConflict,
+    TicketCheckInNotFound,
+    check_in_ticket,
+    ticket_check_in_queryset,
+)
+from .inventory import annotate_inventory, get_inventory_snapshot
+from .models import Order, OrderItem, Payment, Ticket, TicketType
+from .orders.expiration import expire_pending_orders
+from .orders.reservations import (
+    OrderReservationError,
+    reserve_order,
+)
 from .payments.services import (
     PaymentNotFound,
     PaymentOrderNotFound,
@@ -31,13 +49,116 @@ from .payments.services import (
     process_payment_event,
 )
 from .serializers import (
+    AlreadyCheckedInSerializer,
+    DetailErrorSerializer,
     OrderCreateSerializer,
+    OrderConflictSerializer,
     OrderReadSerializer,
+    OrganizerTicketCheckInListSerializer,
+    OrganizerTicketCheckInResponseSerializer,
+    OrganizerTicketCheckInSerializer,
     OrganizerTicketTypeSerializer,
     PaymentReadSerializer,
     SandboxPaymentCompleteSerializer,
     SandboxPaymentWebhookSerializer,
+    TicketCheckInInputSerializer,
+    TicketFilterSerializer,
+    TicketReadSerializer,
+    WebhookOutcomeSerializer,
 )
+
+ORDER_CREATE_EXAMPLES = [
+    OpenApiExample(
+        "Order creation",
+        value={
+            "items": [
+                {"ticket_type_id": 12, "quantity": 2},
+            ]
+        },
+        request_only=True,
+    ),
+]
+ORDER_CONFLICT_EXAMPLES = [
+    OpenApiExample(
+        "Capacity conflict",
+        value={
+            "detail": "“Standard” üçün yalnız 1 bilet qalıb.",
+            "code": "INSUFFICIENT_CAPACITY",
+            "ticket_type_id": 12,
+            "requested_quantity": 2,
+            "available_quantity": 1,
+        },
+        response_only=True,
+        status_codes=["409"],
+    ),
+    OpenApiExample(
+        "Idempotency conflict",
+        value={
+            "detail": (
+                "Bu Idempotency-Key fərqli sorğu üçün istifadə olunub."
+            ),
+            "code": "IDEMPOTENCY_KEY_REUSED",
+        },
+        response_only=True,
+        status_codes=["409"],
+    ),
+]
+TICKET_RESPONSE_EXAMPLES = [
+    OpenApiExample(
+        "Ticket",
+        value={
+            "id": "10000000-0000-4000-8000-000000000001",
+            "qr_code": "20000000-0000-4000-8000-000000000001",
+            "event_slug": "sample-event",
+            "event_title": "Sample Event",
+            "event_start_at": "2026-08-10T18:00:00Z",
+            "event_end_at": "2026-08-10T20:00:00Z",
+            "event_location_name": "Sample Venue",
+            "ticket_type_name": "Standard",
+            "unit_price": "20.00",
+            "currency": "AZN",
+            "status": "valid",
+            "owner_display_name": "Attendee",
+            "is_checked_in": False,
+            "checked_in_at": None,
+            "created_at": "2026-08-01T12:00:00Z",
+        },
+        response_only=True,
+    ),
+]
+CHECK_IN_EXAMPLES = [
+    OpenApiExample(
+        "Check-in request",
+        value={
+            "qr_code": "20000000-0000-4000-8000-000000000001",
+        },
+        request_only=True,
+    ),
+    OpenApiExample(
+        "Successful check-in",
+        value={
+            "result": "checked_in",
+            "ticket_id": "10000000-0000-4000-8000-000000000001",
+            "event_slug": "sample-event",
+            "event_title": "Sample Event",
+            "ticket_type_name": "Standard",
+            "attendee_display_name": "Attendee",
+            "checked_in_at": "2026-08-10T17:45:00Z",
+        },
+        response_only=True,
+        status_codes=["200"],
+    ),
+    OpenApiExample(
+        "Duplicate check-in",
+        value={
+            "detail": "Bu bilet artıq check-in edilib.",
+            "result": "already_checked_in",
+            "checked_in_at": "2026-08-10T17:45:00Z",
+        },
+        response_only=True,
+        status_codes=["409"],
+    ),
+]
 
 
 def order_read_queryset():
@@ -51,17 +172,32 @@ def order_read_queryset():
     )
 
 
-def expire_pending_orders(queryset, now):
-    return queryset.filter(
-        status=Order.Status.PENDING,
-        expires_at__isnull=False,
-        expires_at__lte=now,
-    ).update(
-        status=Order.Status.EXPIRED,
-        updated_at=now,
+def ticket_read_queryset():
+    return Ticket.objects.select_related(
+        "event",
+        "event__venue",
+        "owner",
+        "order_item",
+        "order_item__order",
+        "order_item__ticket_type",
     )
 
 
+@extend_schema_view(
+    get=extend_schema(
+        operation_id="organizer_ticket_type_list",
+        description=(
+            "Ticket types for an organizer-owned event, including current "
+            "availability."
+        ),
+        responses={200: OrganizerTicketTypeSerializer(many=True)},
+    ),
+    post=extend_schema(
+        operation_id="organizer_ticket_type_create",
+        description="Create a ticket type for an organizer-owned event.",
+        responses={201: OrganizerTicketTypeSerializer},
+    ),
+)
 class OrganizerTicketTypeListCreateAPIView(
     ListCreateAPIView
 ):
@@ -82,12 +218,13 @@ class OrganizerTicketTypeListCreateAPIView(
         )
 
     def get_queryset(self):
-        return (
+        queryset = (
             self.get_event()
             .ticket_types
-            .all()
+            .select_related("event")
             .order_by("price", "id")
         )
+        return annotate_inventory(queryset)
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -98,6 +235,46 @@ class OrganizerTicketTypeListCreateAPIView(
         serializer.save(event=self.get_event())
 
 
+@extend_schema_view(
+    get=extend_schema(
+        operation_id="organizer_ticket_type_detail",
+        description=(
+            "Organizer-owned ticket type detail. Cross-owner access "
+            "returns 404."
+        ),
+    ),
+    put=extend_schema(
+        operation_id="organizer_ticket_type_update",
+        responses={
+            200: OrganizerTicketTypeSerializer,
+            409: OpenApiResponse(
+                description=(
+                    "Lifecycle lock or capacity below sold and reserved."
+                )
+            ),
+        },
+    ),
+    patch=extend_schema(
+        operation_id="organizer_ticket_type_partial_update",
+        responses={
+            200: OrganizerTicketTypeSerializer,
+            409: OpenApiResponse(
+                description=(
+                    "Lifecycle lock or capacity below sold and reserved."
+                )
+            ),
+        },
+    ),
+    delete=extend_schema(
+        operation_id="organizer_ticket_type_delete",
+        responses={
+            204: None,
+            409: OpenApiResponse(
+                description="Sold ticket type is lifecycle-locked."
+            ),
+        },
+    ),
+)
 class OrganizerTicketTypeDetailAPIView(
     RetrieveUpdateDestroyAPIView
 ):
@@ -122,8 +299,12 @@ class OrganizerTicketTypeDetailAPIView(
             tickets__isnull=False,
         ).exists()
 
+    @transaction.atomic
     def update(self, request, *args, **kwargs):
-        ticket_type = self.get_object()
+        ticket_type = get_object_or_404(
+            self.get_queryset().select_for_update(),
+            pk=kwargs["pk"],
+        )
 
         if self.has_ticket_sales(ticket_type):
             submitted_fields = set(request.data.keys())
@@ -140,7 +321,43 @@ class OrganizerTicketTypeDetailAPIView(
                     status=status.HTTP_409_CONFLICT,
                 )
 
-        return super().update(request, *args, **kwargs)
+        partial = kwargs.pop("partial", False)
+        serializer = self.get_serializer(
+            ticket_type,
+            data=request.data,
+            partial=partial,
+        )
+        serializer.is_valid(raise_exception=True)
+        proposed_capacity = serializer.validated_data.get("capacity")
+
+        if proposed_capacity is not None:
+            inventory = get_inventory_snapshot(
+                ticket_type,
+                now=timezone.now(),
+            )
+            committed_quantity = (
+                inventory.reserved_quantity
+                + inventory.sold_quantity
+            )
+
+            if proposed_capacity < committed_quantity:
+                return Response(
+                    {
+                        "detail": (
+                            "Capacity aktiv rezerv və satılmış "
+                            "bilet sayından aşağı ola bilməz."
+                        ),
+                        "code": "CAPACITY_BELOW_COMMITTED",
+                        "minimum_capacity": committed_quantity,
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+        self.perform_update(serializer)
+        return Response(
+            serializer.data,
+            status=status.HTTP_200_OK,
+        )
 
     def destroy(self, request, *args, **kwargs):
         ticket_type = self.get_object()
@@ -163,11 +380,25 @@ class OrganizerTicketTypeDetailAPIView(
 class OrderCreateAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        operation_id="order_list",
+        description=(
+            "Orders owned by the authenticated user. Due pending orders "
+            "are persisted as expired before serialization."
+        ),
+        responses={
+            200: OrderReadSerializer(many=True),
+            401: DetailErrorSerializer,
+        },
+    )
     def get(self, request):
         queryset = order_read_queryset().filter(
             buyer=request.user
         )
-        expire_pending_orders(queryset, timezone.now())
+        expire_pending_orders(
+            now=timezone.now(),
+            buyer_id=request.user.pk,
+        )
 
         return Response(
             OrderReadSerializer(queryset, many=True).data,
@@ -175,198 +406,105 @@ class OrderCreateAPIView(APIView):
         )
 
     @transaction.atomic
+    @extend_schema(
+        operation_id="order_create",
+        description=(
+            "Atomically reserve ticket inventory and create an order. "
+            "Idempotency-Key is optional for backward compatibility."
+        ),
+        request=OrderCreateSerializer,
+        parameters=[
+            OpenApiParameter(
+                "Idempotency-Key",
+                OpenApiTypes.STR,
+                location=OpenApiParameter.HEADER,
+                required=False,
+                description=(
+                    "1–255 character mutation key, scoped to the user."
+                ),
+            ),
+        ],
+        responses={
+            200: OrderReadSerializer,
+            201: OrderReadSerializer,
+            400: OpenApiResponse(description="Validation error."),
+            401: DetailErrorSerializer,
+            409: OrderConflictSerializer,
+        },
+        examples=[
+            *ORDER_CREATE_EXAMPLES,
+            *ORDER_CONFLICT_EXAMPLES,
+        ],
+    )
     def post(self, request):
         input_serializer = OrderCreateSerializer(
             data=request.data
         )
         input_serializer.is_valid(raise_exception=True)
 
-        requested_items = input_serializer.validated_data["items"]
-        quantities = {
-            item["ticket_type_id"]: item["quantity"]
-            for item in requested_items
-        }
-        ticket_type_ids = sorted(quantities)
+        idempotency_key = request.headers.get("Idempotency-Key")
 
-        locked_ticket_types = {
-            ticket_type.id: ticket_type
-            for ticket_type in (
-                TicketType.objects
-                .select_for_update()
-                .select_related("event")
-                .filter(id__in=ticket_type_ids)
-            )
-        }
+        if idempotency_key is not None:
+            idempotency_key = idempotency_key.strip()
 
-        if len(locked_ticket_types) != len(ticket_type_ids):
-            return Response(
-                {"detail": "Bilet növlərindən biri tapılmadı."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        event_ids = {
-            ticket_type.event_id
-            for ticket_type in locked_ticket_types.values()
-        }
-
-        if len(event_ids) != 1:
-            return Response(
-                {
-                    "detail": (
-                        "Bir sifariş yalnız bir tədbirə aid "
-                        "biletlərdən ibarət ola bilər."
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        now = timezone.now()
-        first_ticket_type = locked_ticket_types[ticket_type_ids[0]]
-        event = first_ticket_type.event
-
-        if event.status != Event.Status.PUBLISHED:
-            return Response(
-                {"detail": "Bu tədbir hazırda satışda deyil."},
-                status=status.HTTP_409_CONFLICT,
-            )
-
-        if event.start_at <= now:
-            return Response(
-                {"detail": "Başlamış tədbir üçün bilet almaq olmaz."},
-                status=status.HTTP_409_CONFLICT,
-            )
-
-        total_amount = Decimal("0.00")
-        order_item_values = []
-
-        for ticket_type_id in ticket_type_ids:
-            ticket_type = locked_ticket_types[ticket_type_id]
-            quantity = quantities[ticket_type_id]
-
-            if not ticket_type.is_active:
+            if not idempotency_key or len(idempotency_key) > 255:
                 return Response(
                     {
                         "detail": (
-                            f"“{ticket_type.name}” bilet növü "
-                            "aktiv deyil."
-                        )
-                    },
-                    status=status.HTTP_409_CONFLICT,
-                )
-
-            if (
-                ticket_type.sales_start_at
-                and now < ticket_type.sales_start_at
-            ):
-                return Response(
-                    {
-                        "detail": (
-                            f"“{ticket_type.name}” bileti üzrə "
-                            "satış hələ başlamayıb."
-                        )
-                    },
-                    status=status.HTTP_409_CONFLICT,
-                )
-
-            if (
-                ticket_type.sales_end_at
-                and now >= ticket_type.sales_end_at
-            ):
-                return Response(
-                    {
-                        "detail": (
-                            f"“{ticket_type.name}” bileti üzrə "
-                            "satış başa çatıb."
-                        )
-                    },
-                    status=status.HTTP_409_CONFLICT,
-                )
-
-            if quantity > ticket_type.max_per_order:
-                return Response(
-                    {
-                        "detail": (
-                            f"“{ticket_type.name}” üçün bir sifarişdə "
-                            f"maksimum {ticket_type.max_per_order} "
-                            "bilet almaq olar."
+                            "Idempotency-Key 1–255 simvol "
+                            "uzunluğunda olmalıdır."
                         )
                     },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            reserved_quantity = (
-                OrderItem.objects
-                .filter(ticket_type=ticket_type)
-                .filter(
-                    Q(order__status=Order.Status.PAID)
-                    | Q(
-                        order__status=Order.Status.PENDING,
-                        order__expires_at__gt=now,
-                    )
-                )
-                .aggregate(total=Sum("quantity"))["total"]
-                or 0
+        try:
+            reservation = reserve_order(
+                buyer=request.user,
+                items=input_serializer.validated_data["items"],
+                idempotency_key=idempotency_key,
+            )
+        except OrderReservationError as exc:
+            return Response(
+                exc.payload,
+                status=exc.status_code,
             )
 
-            available_quantity = (
-                ticket_type.capacity - reserved_quantity
-            )
-
-            if quantity > available_quantity:
-                return Response(
-                    {
-                        "detail": (
-                            f"“{ticket_type.name}” üçün yalnız "
-                            f"{max(available_quantity, 0)} bilet qalıb."
-                        )
-                    },
-                    status=status.HTTP_409_CONFLICT,
-                )
-
-            total_amount += ticket_type.price * quantity
-            order_item_values.append(
-                {
-                    "ticket_type": ticket_type,
-                    "quantity": quantity,
-                    "unit_price": ticket_type.price,
-                }
-            )
-
-        order = Order.objects.create(
-            buyer=request.user,
-            status=Order.Status.PENDING,
-            total_amount=total_amount,
-            currency="AZN",
-            expires_at=now + timedelta(minutes=15),
+        order = order_read_queryset().get(
+            pk=reservation.order.pk
         )
-
-        OrderItem.objects.bulk_create(
-            [
-                OrderItem(
-                    order=order,
-                    **item_values,
-                )
-                for item_values in order_item_values
-            ]
-        )
-
-        order = order_read_queryset().get(pk=order.pk)
         output_serializer = OrderReadSerializer(order)
+        response_status = (
+            status.HTTP_201_CREATED
+            if reservation.created
+            else status.HTTP_200_OK
+        )
 
         return Response(
             output_serializer.data,
-            status=status.HTTP_201_CREATED,
+            status=response_status,
         )
 
 
 class OrderDetailAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        operation_id="order_detail",
+        description=(
+            "Owned order detail. Another user's order returns 404."
+        ),
+        responses={
+            200: OrderReadSerializer,
+            401: DetailErrorSerializer,
+            404: DetailErrorSerializer,
+        },
+    )
     def get(self, request, order_id):
-        owned_orders = Order.objects.filter(buyer=request.user)
         expire_pending_orders(
-            owned_orders.filter(pk=order_id),
-            timezone.now(),
+            now=timezone.now(),
+            order_ids=[order_id],
+            buyer_id=request.user.pk,
         )
         order = get_object_or_404(
             order_read_queryset().filter(buyer=request.user),
@@ -383,6 +521,20 @@ class OrderCancelAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     @transaction.atomic
+    @extend_schema(
+        operation_id="order_cancel",
+        description=(
+            "Cancel an owned, unexpired pending order. Terminal or "
+            "elapsed orders return 409."
+        ),
+        request=None,
+        responses={
+            200: OrderReadSerializer,
+            401: DetailErrorSerializer,
+            404: DetailErrorSerializer,
+            409: DetailErrorSerializer,
+        },
+    )
     def post(self, request, order_id):
         order = get_object_or_404(
             order_read_queryset()
@@ -421,9 +573,242 @@ class OrderCancelAPIView(APIView):
         )
 
 
+class TicketListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        operation_id="ticket_list",
+        description="Tickets owned by the authenticated user, newest first.",
+        parameters=[
+            OpenApiParameter(
+                "event_status",
+                OpenApiTypes.STR,
+                enum=["upcoming", "past"],
+                description=(
+                    "upcoming means event end_at is now or later; "
+                    "past means it is earlier."
+                ),
+            ),
+            OpenApiParameter(
+                "is_checked_in",
+                OpenApiTypes.STR,
+                enum=["true", "false"],
+                description="Filter by persisted check-in time.",
+            ),
+        ],
+        responses={
+            200: TicketReadSerializer(many=True),
+            400: OpenApiResponse(description="Invalid filter value."),
+            401: DetailErrorSerializer,
+        },
+        examples=TICKET_RESPONSE_EXAMPLES,
+    )
+    def get(self, request):
+        filter_serializer = TicketFilterSerializer(
+            data=request.query_params
+        )
+        filter_serializer.is_valid(raise_exception=True)
+        filters = filter_serializer.validated_data
+        queryset = ticket_read_queryset().filter(
+            owner=request.user
+        )
+
+        event_status = filters.get("event_status")
+
+        if event_status == "upcoming":
+            queryset = queryset.filter(
+                event__end_at__gte=timezone.now()
+            )
+        elif event_status == "past":
+            queryset = queryset.filter(
+                event__end_at__lt=timezone.now()
+            )
+
+        is_checked_in = filters.get("is_checked_in")
+
+        if is_checked_in == "true":
+            queryset = queryset.filter(used_at__isnull=False)
+        elif is_checked_in == "false":
+            queryset = queryset.filter(used_at__isnull=True)
+
+        queryset = queryset.order_by("-issued_at")
+
+        return Response(
+            TicketReadSerializer(queryset, many=True).data,
+            status=status.HTTP_200_OK,
+        )
+
+
+class TicketDetailAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        operation_id="ticket_detail",
+        description=(
+            "Owned ticket detail. Another user's ticket returns 404."
+        ),
+        responses={
+            200: TicketReadSerializer,
+            401: DetailErrorSerializer,
+            404: DetailErrorSerializer,
+        },
+        examples=TICKET_RESPONSE_EXAMPLES,
+    )
+    def get(self, request, ticket_id):
+        ticket = get_object_or_404(
+            ticket_read_queryset().filter(owner=request.user),
+            pk=ticket_id,
+        )
+
+        return Response(
+            TicketReadSerializer(ticket).data,
+            status=status.HTTP_200_OK,
+        )
+
+
+class OrganizerTicketCheckInAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_event(self):
+        return get_object_or_404(
+            Event.objects.filter(organizer=self.request.user),
+            slug=self.kwargs["event_slug"],
+        )
+
+    @extend_schema(
+        operation_id="organizer_check_in_list",
+        description=(
+            "Checked-in tickets for an organizer-owned event, newest "
+            "check-in first. Cross-owner event access returns 404."
+        ),
+        responses={
+            200: OrganizerTicketCheckInListSerializer(many=True),
+            401: DetailErrorSerializer,
+            404: DetailErrorSerializer,
+        },
+    )
+    def get(self, request, event_slug):
+        event = self.get_event()
+        tickets = (
+            ticket_check_in_queryset()
+            .filter(
+                event=event,
+                used_at__isnull=False,
+            )
+            .order_by("-used_at")
+        )
+
+        return Response(
+            OrganizerTicketCheckInListSerializer(
+                tickets,
+                many=True,
+            ).data,
+            status=status.HTTP_200_OK,
+        )
+
+    @extend_schema(
+        operation_id="organizer_ticket_check_in",
+        description=(
+            "Check in one paid, valid ticket using its UUID QR payload. "
+            "The row is locked so parallel scans produce one success."
+        ),
+        request=TicketCheckInInputSerializer,
+        responses={
+            200: OrganizerTicketCheckInResponseSerializer,
+            400: OpenApiResponse(description="Missing or malformed UUID."),
+            401: DetailErrorSerializer,
+            404: DetailErrorSerializer,
+            409: AlreadyCheckedInSerializer,
+        },
+        examples=CHECK_IN_EXAMPLES,
+    )
+    def post(self, request, event_slug):
+        input_serializer = TicketCheckInInputSerializer(
+            data=request.data
+        )
+        input_serializer.is_valid(raise_exception=True)
+        event = self.get_event()
+
+        try:
+            result = check_in_ticket(
+                event=event,
+                qr_code=input_serializer.validated_data["qr_code"],
+                organizer=request.user,
+            )
+        except TicketCheckInNotFound as exc:
+            raise Http404 from exc
+        except TicketCheckInConflict as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        if result.already_checked_in:
+            return Response(
+                {
+                    "detail": "Bu bilet artıq check-in edilib.",
+                    "result": "already_checked_in",
+                    "checked_in_at": result.ticket.used_at,
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        response_data = {
+            "result": "checked_in",
+            **OrganizerTicketCheckInSerializer(
+                result.ticket
+            ).data,
+        }
+        return Response(
+            response_data,
+            status=status.HTTP_200_OK,
+        )
+
+
 class PaymentInitiateAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        operation_id="payment_initiate",
+        description=(
+            "Initiate payment for an owned pending order. Amount and "
+            "currency always come from the server-side order. Replays "
+            "return the existing payment."
+        ),
+        request=None,
+        responses={
+            200: PaymentReadSerializer,
+            201: PaymentReadSerializer,
+            401: DetailErrorSerializer,
+            404: DetailErrorSerializer,
+            409: DetailErrorSerializer,
+            503: DetailErrorSerializer,
+        },
+        examples=[
+            OpenApiExample(
+                "Payment initiation",
+                value={
+                    "id": "30000000-0000-4000-8000-000000000001",
+                    "order_id": (
+                        "40000000-0000-4000-8000-000000000001"
+                    ),
+                    "status": "initiated",
+                    "amount": "40.00",
+                    "currency": "AZN",
+                    "provider": "sandbox",
+                    "provider_reference": "sandbox_example_reference",
+                    "checkout_url": (
+                        "/api/payments/sandbox/"
+                        "30000000-0000-4000-8000-000000000001/"
+                        "complete/"
+                    ),
+                    "created_at": "2026-08-01T12:00:00Z",
+                    "updated_at": "2026-08-01T12:00:00Z",
+                },
+                response_only=True,
+            )
+        ],
+    )
     def post(self, request, order_id):
         try:
             result = initiate_payment(
@@ -458,6 +843,21 @@ class PaymentInitiateAPIView(APIView):
 class SandboxPaymentCompleteAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        operation_id="sandbox_payment_complete",
+        description=(
+            "Development sandbox completion for an owned sandbox payment. "
+            "This is not a Chewick integration."
+        ),
+        request=SandboxPaymentCompleteSerializer,
+        responses={
+            200: PaymentReadSerializer,
+            400: OpenApiResponse(description="Invalid result or payload."),
+            401: DetailErrorSerializer,
+            404: DetailErrorSerializer,
+            409: DetailErrorSerializer,
+        },
+    )
     def post(self, request, payment_id):
         if not settings.PAYMENT_SANDBOX_ENABLED:
             raise Http404
@@ -526,6 +926,37 @@ class SandboxPaymentWebhookAPIView(APIView):
             expected_signature,
         )
 
+    @extend_schema(
+        operation_id="sandbox_payment_webhook",
+        auth=[],
+        description=(
+            "Signed, idempotent sandbox payment webhook. Send a SHA-256 "
+            "HMAC signature in X-HARA-SIGNATURE. Duplicate provider event "
+            "IDs do not issue additional tickets."
+        ),
+        request=SandboxPaymentWebhookSerializer,
+        parameters=[
+            OpenApiParameter(
+                "X-HARA-SIGNATURE",
+                OpenApiTypes.STR,
+                location=OpenApiParameter.HEADER,
+                required=True,
+                description=(
+                    "HMAC signature in sha256=<hex-digest> format. "
+                    "The signing secret is never exposed."
+                ),
+            )
+        ],
+        responses={
+            200: WebhookOutcomeSerializer,
+            400: OpenApiResponse(
+                description="Malformed or mismatched webhook payload."
+            ),
+            401: DetailErrorSerializer,
+            404: DetailErrorSerializer,
+            409: DetailErrorSerializer,
+        },
+    )
     def post(self, request):
         raw_body = request.body
         provided_signature = request.headers.get(
