@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from datetime import timedelta
+from urllib.parse import parse_qsl, unquote, urlparse
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -17,9 +18,6 @@ SECRET_KEY = os.getenv(
 )
 
 DEBUG = os.getenv("DJANGO_DEBUG", "false").lower() == "true"
-
-import os
-
 
 def get_env_list(variable_name):
     return [
@@ -86,10 +84,17 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-CORS_ALLOWED_ORIGINS = [
+default_cors_allowed_origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://hara-tau.vercel.app",
 ]
+
+CORS_ALLOWED_ORIGINS = []
+
+for origin in default_cors_allowed_origins + get_env_list("CORS_ALLOWED_ORIGINS"):
+    if origin not in CORS_ALLOWED_ORIGINS:
+        CORS_ALLOWED_ORIGINS.append(origin)
 
 ROOT_URLCONF = 'config.urls'
 
@@ -114,18 +119,42 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
+def get_database_config():
+    database_url = os.getenv("DATABASE_URL", "").strip()
+
+    if database_url:
+        parsed_url = urlparse(database_url)
+        options = dict(parse_qsl(parsed_url.query))
+
+        return {
+            'ENGINE': 'django.contrib.gis.db.backends.postgis',
+            'NAME': unquote(parsed_url.path.lstrip('/')),
+            'USER': unquote(parsed_url.username or ''),
+            'PASSWORD': unquote(parsed_url.password or ''),
+            'HOST': parsed_url.hostname or '',
+            'PORT': str(parsed_url.port or 5432),
+            'OPTIONS': options,
+        }
+
+    options = {}
+    sslmode = os.getenv('DB_SSLMODE', 'require').strip()
+
+    if sslmode:
+        options['sslmode'] = sslmode
+
+    return {
         'ENGINE': 'django.contrib.gis.db.backends.postgis',
         'NAME': os.getenv('DB_NAME', 'hara'),
         'USER': os.getenv('DB_USER', 'hara'),
         'PASSWORD': os.getenv('DB_PASSWORD', ''),
         'HOST': os.getenv('DB_HOST', 'localhost'),
         'PORT': os.getenv('DB_PORT', '5432'),
-        'OPTIONS': {
-            'sslmode': 'require',
-        },
+        'OPTIONS': options,
     }
+
+
+DATABASES = {
+    'default': get_database_config(),
 }
 
 
