@@ -16,6 +16,8 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import include, path
+from django.contrib import admin
+from django.http import JsonResponse
 from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularSwaggerView,
@@ -42,8 +44,16 @@ from ticketing.views import (
     TicketListAPIView,
 )
 
+def health_check(request):
+    return JsonResponse({
+        "status": "ok",
+        "service": "HARA Backend API",
+    })
 
 urlpatterns = [
+    path("", health_check, name="health-check"),
+    path("admin/", admin.site.urls),
+
     path("admin/", admin.site.urls),
     path(
         "api/schema/",
