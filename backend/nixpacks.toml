@@ -2,7 +2,9 @@
 aptPkgs = [
   "gdal-bin",
   "libgdal-dev",
+  "libgeos-dev",
   "binutils"
 ]
 
-
+[start]
+cmd = "gunicorn config.wsgi:application"
