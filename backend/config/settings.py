@@ -18,11 +18,40 @@ SECRET_KEY = os.getenv(
 
 DEBUG = os.getenv("DJANGO_DEBUG", "false").lower() == "true"
 
+import os
+
+
+def get_env_list(variable_name):
+    return [
+        value.strip()
+        for value in os.getenv(variable_name, "").split(",")
+        if value.strip()
+    ]
+
+
+railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN")
+
 ALLOWED_HOSTS = [
-    host.strip()
-    for host in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
-    if host.strip()
+    "localhost",
+    "127.0.0.1",
 ]
+
+ALLOWED_HOSTS += get_env_list("ALLOWED_HOSTS")
+
+if railway_domain and railway_domain not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(railway_domain)
+
+
+CSRF_TRUSTED_ORIGINS = get_env_list("CSRF_TRUSTED_ORIGINS")
+
+if railway_domain:
+    railway_origin = f"https://{railway_domain}"
+
+    if railway_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(railway_origin)
+
+
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 
 # Application definition
