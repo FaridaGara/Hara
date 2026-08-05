@@ -64,4 +64,13 @@ describe("Hara home", () => {
     const homeLink = screen.getByRole("link", { name: "Əsas səhifə" });
     expect(homeLink.getAttribute("aria-current")).toBe("page");
   });
+
+  it("telefonun sistem status bar-ını tətbiq UI-sində göstərmir", () => {
+    const { container } = render(<HaraHome loadEvents={vi.fn().mockResolvedValue([])} />);
+
+    expect(screen.queryByText("9:41")).toBeNull();
+    expect(container.innerHTML).not.toContain("/figma/home/cellular.svg");
+    expect(container.innerHTML).not.toContain("/figma/home/wifi.svg");
+    expect(container.innerHTML).not.toContain("/figma/home/battery.svg");
+  });
 });

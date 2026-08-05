@@ -91,22 +91,6 @@ function FavoriteButton({ light = false, compact = false }: { light?: boolean; c
   );
 }
 
-export function StatusBar() {
-  return (
-    <div className="flex h-[50px] items-start pt-[21px]" aria-hidden="true">
-      <div className="flex flex-1 justify-center pl-4 pr-1.5">
-        <span className="text-[17px] leading-[22px] font-semibold tracking-[-0.4px]">9:41</span>
-      </div>
-      <div className="h-2.5 w-[124px] shrink-0" />
-      <div className="flex flex-1 items-center justify-center gap-[7px] pr-4 pl-1.5">
-        <Image src="/figma/home/cellular.svg" alt="" width={20} height={13} />
-        <Image src="/figma/home/wifi.svg" alt="" width={18} height={13} />
-        <Image src="/figma/home/battery.svg" alt="" width={28} height={13} />
-      </div>
-    </div>
-  );
-}
-
 export function Header() {
   return (
     <header className="flex h-[72px] items-center gap-3 px-4 py-4">
@@ -335,7 +319,6 @@ export function HaraHome({ loadEvents = eventsApi.list }: { loadEvents?: LoadEve
 
   return (
     <main className="hara-home relative mx-auto min-h-dvh w-full max-w-[402px] overflow-x-hidden bg-white pb-[108px] text-[#18181a] sm:my-6 sm:min-h-[calc(100dvh-48px)] sm:rounded-[32px]">
-      <StatusBar />
       <Header />
       <SearchBar onSearch={searchAgain} />
 
