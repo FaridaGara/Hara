@@ -21,7 +21,7 @@ describe("Hara home", () => {
 
     expect(screen.getByText("Tədbirlər yüklənir…")).toBeTruthy();
     expect(await screen.findAllByText(eventFixture.title)).toHaveLength(2);
-    expect(screen.getByText(secondEvent.title)).toBeTruthy();
+    expect(screen.getAllByText(secondEvent.title)).toHaveLength(2);
     expect(screen.getAllByRole("link", { name: eventFixture.title })[0].getAttribute("href"))
       .toBe(`/events/${eventFixture.slug}`);
     expect(loadEvents).toHaveBeenCalledWith(
@@ -59,10 +59,9 @@ describe("Hara home", () => {
     expect(await screen.findByText("Uyğun tədbir tapılmadı.")).toBeTruthy();
   });
 
-  it("filter chip-in vizual seçimini qoruyur", () => {
+  it("Figma tab bar-da əsas səhifəni aktiv göstərir", () => {
     render(<HaraHome loadEvents={vi.fn().mockResolvedValue([])} />);
-    const chip = screen.getByRole("button", { name: "Pulsuz" });
-    fireEvent.click(chip);
-    expect(chip.getAttribute("aria-pressed")).toBe("true");
+    const homeLink = screen.getByRole("link", { name: "Əsas səhifə" });
+    expect(homeLink.getAttribute("aria-current")).toBe("page");
   });
 });

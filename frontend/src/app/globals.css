@@ -19,6 +19,11 @@ body {
   min-width: 320px;
 }
 
+.hara-home {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Inter, Arial, sans-serif;
+  color-scheme: light;
+}
+
 * {
   box-sizing: border-box;
 }

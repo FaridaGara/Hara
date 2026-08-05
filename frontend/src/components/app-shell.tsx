@@ -22,7 +22,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className={pathname === "/" ? "min-h-screen bg-[#f2f2f2]" : "min-h-screen bg-[#09090e] text-white"}>
+    <div className={pathname === "/" ? "min-h-screen bg-[#f2f2f2] sm:py-px" : "min-h-screen bg-[#09090e] text-white"}>
       {pathname !== "/" ? <header className="sticky top-0 z-30 border-b border-white/[0.08] bg-[#111118]/95 backdrop-blur-xl">
         <div className="mx-auto flex min-h-16 max-w-5xl items-center justify-between gap-3 px-4 sm:px-6">
           <Link
