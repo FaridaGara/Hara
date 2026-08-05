@@ -1,3 +1,4 @@
+from django.test import SimpleTestCase
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -11,3 +12,18 @@ class HealthEndpointTests(APITestCase):
             response.json(),
             {"status": "ok", "service": "hara-api"},
         )
+
+
+class CorsConfigurationTests(SimpleTestCase):
+    def test_production_frontend_domains_are_allowed(self):
+        for origin in (
+            "https://hara.today",
+            "https://www.hara.today",
+        ):
+            with self.subTest(origin=origin):
+                response = self.client.options(
+                    "/api/events/",
+                    HTTP_ORIGIN=origin,
+                    HTTP_ACCESS_CONTROL_REQUEST_METHOD="GET",
+                )
+                self.assertEqual(response["access-control-allow-origin"], origin)
