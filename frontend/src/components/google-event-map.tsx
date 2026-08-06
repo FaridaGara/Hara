@@ -64,6 +64,7 @@ function createEventMarkerContent(event: HaraEvent, selected: boolean) {
   content.className =
     "grid size-9 place-items-center rounded-full border-2 border-white shadow-[0_2px_10px_rgba(0,0,0,.28)] transition-transform";
   content.style.background = selected ? "#6cb500" : "#565dd8";
+  content.style.transform = selected ? "scale(1.08)" : "scale(1)";
   content.setAttribute("aria-hidden", "true");
 
   const glyph = document.createElement("img");
@@ -79,7 +80,7 @@ function createEventMarkerContent(event: HaraEvent, selected: boolean) {
 function createClusterContent(count: number) {
   const content = document.createElement("div");
   content.className =
-    "grid size-10 place-items-center rounded-full border-2 border-[#d0ff8a] bg-[#6cb500] text-xs font-semibold text-white shadow-[0_2px_12px_rgba(0,0,0,.3)]";
+    "grid size-10 place-items-center rounded-full border-2 border-[#cfd2ff] bg-[#787de0] text-xs font-semibold text-white shadow-[0_2px_12px_rgba(0,0,0,.3)]";
   content.textContent = count > 9 ? "9+" : String(count);
   content.setAttribute("aria-hidden", "true");
   return content;
@@ -96,12 +97,23 @@ export function GoogleEventMap({
 }: GoogleEventMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
+  const markerRecordsRef = useRef(
+    new globalThis.Map<
+      string,
+      { marker: google.maps.marker.AdvancedMarkerElement; content: HTMLDivElement }
+    >(),
+  );
+  const selectedEventIdRef = useRef(selectedEventId);
   const positionsRef = useRef<google.maps.LatLngLiteral[]>([]);
   const fittedEventsRef = useRef("");
   const onSelectEventRef = useRef(onSelectEvent);
   const onSelectClusterRef = useRef(onSelectCluster);
   const [status, setStatus] = useState<MapStatus>("loading");
   const [mapReady, setMapReady] = useState(false);
+
+  useEffect(() => {
+    selectedEventIdRef.current = selectedEventId;
+  }, [selectedEventId]);
 
   useEffect(() => {
     onSelectEventRef.current = onSelectEvent;
@@ -177,12 +189,14 @@ export function GoogleEventMap({
           if (!position) return [];
 
           positions.push(position);
+          const selected = event.id === selectedEventIdRef.current;
+          const content = createEventMarkerContent(event, selected);
           const marker = new AdvancedMarkerElement({
             position,
             title: event.title,
             gmpClickable: true,
-            content: createEventMarkerContent(event, event.id === selectedEventId),
-            zIndex: event.id === selectedEventId ? 1000 : 1,
+            content,
+            zIndex: selected ? 1000 : 1,
           });
           marker.addListener("click", () => {
             onSelectEventRef.current(event);
@@ -192,6 +206,7 @@ export function GoogleEventMap({
             }
           });
           markerEvents.set(marker, event);
+          markerRecordsRef.current.set(event.id, { marker, content });
           return [marker];
         });
 
@@ -252,6 +267,7 @@ export function GoogleEventMap({
           markers.forEach((marker) => {
             marker.map = null;
           });
+          markerRecordsRef.current.clear();
         };
       },
     );
@@ -260,7 +276,16 @@ export function GoogleEventMap({
       disposed = true;
       cleanup();
     };
-  }, [events, mapReady, selectedEventId]);
+  }, [events, mapReady]);
+
+  useEffect(() => {
+    markerRecordsRef.current.forEach(({ marker, content }, eventId) => {
+      const selected = eventId === selectedEventId;
+      content.style.background = selected ? "#6cb500" : "#565dd8";
+      content.style.transform = selected ? "scale(1.08)" : "scale(1)";
+      marker.zIndex = selected ? 1000 : 1;
+    });
+  }, [selectedEventId]);
 
   useEffect(() => {
     const map = mapRef.current;
