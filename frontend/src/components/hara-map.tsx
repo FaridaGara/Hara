@@ -2,11 +2,12 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 import { ApiError, eventsApi, type HaraEvent } from "@/lib/api";
 import { formatBakuDate, safePosterUrl } from "@/lib/format";
 
+import { GoogleEventMap } from "./google-event-map";
 import { MobileTabBar } from "./mobile-tab-bar";
 
 type LoadEvents = (
@@ -16,8 +17,11 @@ type LoadEvents = (
 
 type MapMode =
   | { kind: "none" }
-  | { kind: "single"; eventIndex: number }
-  | { kind: "cluster" };
+  | { kind: "single"; eventId: string }
+  | { kind: "cluster"; eventIds: string[] };
+
+const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ?? "";
+const GOOGLE_MAPS_MAP_ID = process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID?.trim() || "DEMO_MAP_ID";
 
 const CATEGORIES = ["Hamısı", "Musiqi", "Teatr", "Workshop", "İdman"] as const;
 
@@ -168,6 +172,7 @@ export function HaraMap({ loadEvents = eventsApi.list }: { loadEvents?: LoadEven
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]>("Hamısı");
   const [mode, setMode] = useState<MapMode>({ kind: "none" });
+  const [centerRequest, setCenterRequest] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -199,72 +204,107 @@ export function HaraMap({ loadEvents = eventsApi.list }: { loadEvents?: LoadEven
     });
   }, [category, events, query]);
 
+  const visibleEventsById = useMemo(
+    () => new Map(visibleEvents.map((event) => [event.id, event])),
+    [visibleEvents],
+  );
+
   const selectedEvent =
-    mode.kind === "single" && visibleEvents.length
-      ? visibleEvents[mode.eventIndex % visibleEvents.length]
+    mode.kind === "single"
+      ? visibleEventsById.get(mode.eventId) ?? null
       : null;
+  const clusterEvents =
+    mode.kind === "cluster"
+      ? mode.eventIds.flatMap((eventId) => {
+          const event = visibleEventsById.get(eventId);
+          return event ? [event] : [];
+        })
+      : [];
   const clusterLabel = events.length > 9 ? "9+" : String(Math.max(events.length, 1));
+
+  const selectEvent = useCallback((event: HaraEvent) => {
+    setMode({ kind: "single", eventId: event.id });
+  }, []);
+
+  const selectCluster = useCallback((clusteredEvents: HaraEvent[]) => {
+    setMode({ kind: "cluster", eventIds: clusteredEvents.map((event) => event.id) });
+  }, []);
 
   const submitSearch = (event: FormEvent) => {
     event.preventDefault();
     setMode({ kind: "none" });
+    setCenterRequest((value) => value + 1);
   };
 
   return (
     <main className="hara-home relative mx-auto h-dvh min-h-[620px] w-full max-w-[402px] overflow-hidden bg-white text-[#18181a] sm:my-6 sm:h-[calc(100dvh-48px)] sm:rounded-[32px]">
       <div className="absolute inset-x-0 top-[116px] bottom-[88px] overflow-hidden" data-testid="map-canvas">
-        <MapBackground clustered={mode.kind === "cluster"} />
-
-        {mode.kind === "cluster" ? (
-          <div className="absolute inset-0">
-            <ClusterMarker
-              label="9+"
-              tone="dark"
-              className="left-[32%] top-[55%]"
-              onClick={() => setMode({ kind: "cluster" })}
-              ariaLabel="Digər tədbir klasteri"
-            />
-            <ClusterMarker
-              label={clusterLabel}
-              tone="green"
-              className="left-[44%] top-[60%]"
-              onClick={() => setMode({ kind: "cluster" })}
-              ariaLabel="Seçilmiş tədbir klasteri"
-            />
-          </div>
+        {GOOGLE_MAPS_API_KEY ? (
+          <GoogleEventMap
+            apiKey={GOOGLE_MAPS_API_KEY}
+            mapId={GOOGLE_MAPS_MAP_ID}
+            events={visibleEvents}
+            selectedEventId={selectedEvent?.id ?? null}
+            centerRequest={centerRequest}
+            onSelectEvent={selectEvent}
+            onSelectCluster={selectCluster}
+          />
         ) : (
-          <div className="absolute inset-0">
-            {CLOSE_PINS.map((pin, index) => {
-              const event = visibleEvents.length ? visibleEvents[index % visibleEvents.length] : null;
-              const selected = mode.kind === "single" && mode.eventIndex === index;
+          <>
+            <MapBackground clustered={mode.kind === "cluster"} />
 
-              return (
-                <button
-                  key={pin.icon}
-                  type="button"
-                  onClick={() => event && setMode({ kind: "single", eventIndex: index })}
-                  aria-label={event ? `${event.title} pinini seç ${index + 1}` : `Tədbir pini ${index + 1}`}
-                  className={`absolute grid size-8 place-items-center rounded-full shadow-[0_0_8px_rgba(0,0,0,.16)] transition active:scale-95 ${
-                    selected ? "bg-[#6cb500]" : "bg-[#4e55c5]"
-                  }`}
-                  style={{
-                    left: `${(pin.left / 402) * 100}%`,
-                    top: `${(pin.top / 616) * 100}%`,
-                  }}
-                >
-                  <Image src={pin.icon} alt="" width={16} height={16} />
-                </button>
-              );
-            })}
+            {mode.kind === "cluster" ? (
+              <div className="absolute inset-0">
+                <ClusterMarker
+                  label="9+"
+                  tone="dark"
+                  className="left-[32%] top-[55%]"
+                  onClick={() => selectCluster(visibleEvents)}
+                  ariaLabel="Digər tədbir klasteri"
+                />
+                <ClusterMarker
+                  label={clusterLabel}
+                  tone="green"
+                  className="left-[44%] top-[60%]"
+                  onClick={() => selectCluster(visibleEvents)}
+                  ariaLabel="Seçilmiş tədbir klasteri"
+                />
+              </div>
+            ) : (
+              <div className="absolute inset-0">
+                {CLOSE_PINS.map((pin, index) => {
+                  const event = visibleEvents.length ? visibleEvents[index % visibleEvents.length] : null;
+                  const selected = mode.kind === "single" && mode.eventId === event?.id;
 
-            <ClusterMarker
-              label={clusterLabel}
-              tone="purple"
-              className="left-[46%] top-[69%]"
-              onClick={() => setMode({ kind: "cluster" })}
-              ariaLabel="Tədbir klasterini aç"
-            />
-          </div>
+                  return (
+                    <button
+                      key={pin.icon}
+                      type="button"
+                      onClick={() => event && selectEvent(event)}
+                      aria-label={event ? `${event.title} pinini seç ${index + 1}` : `Tədbir pini ${index + 1}`}
+                      className={`absolute grid size-8 place-items-center rounded-full shadow-[0_0_8px_rgba(0,0,0,.16)] transition active:scale-95 ${
+                        selected ? "bg-[#6cb500]" : "bg-[#4e55c5]"
+                      }`}
+                      style={{
+                        left: `${(pin.left / 402) * 100}%`,
+                        top: `${(pin.top / 616) * 100}%`,
+                      }}
+                    >
+                      <Image src={pin.icon} alt="" width={16} height={16} />
+                    </button>
+                  );
+                })}
+
+                <ClusterMarker
+                  label={clusterLabel}
+                  tone="purple"
+                  className="left-[46%] top-[69%]"
+                  onClick={() => selectCluster(visibleEvents)}
+                  ariaLabel="Tədbir klasterini aç"
+                />
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -293,7 +333,8 @@ export function HaraMap({ loadEvents = eventsApi.list }: { loadEvents?: LoadEven
           </button>
           <button
             type="button"
-            aria-label="Xəritə parametrləri"
+            aria-label="Xəritəni mərkəzlə"
+            onClick={() => setCenterRequest((value) => value + 1)}
             className="grid size-12 shrink-0 place-items-center rounded-full bg-[#f3f5f7] transition active:scale-95"
           >
             <Image src="/figma/map/setting.svg" alt="" width={24} height={24} />
@@ -311,6 +352,7 @@ export function HaraMap({ loadEvents = eventsApi.list }: { loadEvents?: LoadEven
                 onClick={() => {
                   setCategory(item);
                   setMode({ kind: "none" });
+                  setCenterRequest((value) => value + 1);
                 }}
                 className={`h-9 shrink-0 rounded-xl border px-3 text-[13px] leading-[18px] tracking-[-0.08px] transition active:scale-95 ${
                   active
@@ -352,13 +394,13 @@ export function HaraMap({ loadEvents = eventsApi.list }: { loadEvents?: LoadEven
         </section>
       ) : null}
 
-      {mode.kind === "cluster" && visibleEvents.length ? (
+      {mode.kind === "cluster" && clusterEvents.length ? (
         <section
           className="absolute right-0 bottom-[88px] left-0 z-30 bg-white/32 pt-3 pb-2 backdrop-blur-[10px]"
           aria-label="Yaxın tədbirlər"
         >
           <div className="scrollbar-none flex snap-x snap-mandatory gap-2.5 overflow-x-auto scroll-px-4 px-4">
-            {visibleEvents.slice(0, 4).map((event) => (
+            {clusterEvents.slice(0, 4).map((event) => (
               <div key={event.id} className="snap-start">
                 <MapEventCard event={event} compact />
               </div>
