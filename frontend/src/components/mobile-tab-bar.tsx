@@ -34,13 +34,19 @@ const NAV_ITEMS = [
   },
 ] as const;
 
-export function MobileTabBar({ active }: { active: ActiveTab }) {
+export function MobileTabBar({
+  active,
+  placement = "viewport",
+}: {
+  active: ActiveTab;
+  placement?: "viewport" | "container";
+}) {
   return (
     <nav
-      className="fixed right-0 bottom-0 left-0 z-40 mx-auto flex h-[88px] w-full max-w-[402px] flex-col border-t border-[#f2f2f2] bg-white/75 backdrop-blur-[10px]"
+      className={`${placement === "container" ? "absolute" : "fixed"} right-0 bottom-0 left-0 z-40 mx-auto flex h-[92px] w-full max-w-[402px] flex-col border-t border-[#f2f2f2] bg-white/[0.72] backdrop-blur-[10px]`}
       aria-label="Əsas naviqasiya"
     >
-      <div className="flex h-[54px] items-center px-4 pt-3">
+      <div className="flex h-[58px] items-center px-4 pt-3">
         {NAV_ITEMS.map((item) => {
           const isActive = active === item.id;
 
@@ -49,7 +55,7 @@ export function MobileTabBar({ active }: { active: ActiveTab }) {
               key={item.id}
               href={item.href}
               aria-current={isActive ? "page" : undefined}
-              className="flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 text-[13px] leading-[18px] tracking-[-0.08px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#565dd8]"
+              className="flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-3 text-[13px] leading-[18px] tracking-[-0.08px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#565dd8]"
             >
               <Image
                 src={isActive ? item.activeIcon : item.icon}
@@ -58,7 +64,7 @@ export function MobileTabBar({ active }: { active: ActiveTab }) {
                 height={24}
                 className="size-6"
               />
-              <span className={isActive ? "text-[#565dd8]" : "text-black/40"}>
+              <span className={isActive ? "text-[#565dd8]" : "text-black/[0.38]"}>
                 {item.label}
               </span>
             </Link>
@@ -66,7 +72,10 @@ export function MobileTabBar({ active }: { active: ActiveTab }) {
         })}
       </div>
       <div className="relative h-[34px]">
-        <div className="absolute bottom-2 left-1/2 h-[5px] w-36 -translate-x-1/2 rounded-full bg-[#1a1a1a]" />
+        <div
+          aria-hidden="true"
+          className="absolute bottom-2 left-1/2 h-[5px] w-36 -translate-x-1/2 rounded-full bg-[#1a1a1a]"
+        />
       </div>
     </nav>
   );

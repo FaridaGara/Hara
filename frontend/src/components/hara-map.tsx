@@ -238,7 +238,7 @@ export function HaraMap({ loadEvents = eventsApi.list }: { loadEvents?: LoadEven
 
   return (
     <main className="hara-home relative mx-auto h-dvh min-h-[620px] w-full max-w-[402px] overflow-hidden bg-white text-[#18181a] sm:my-6 sm:h-[calc(100dvh-48px)] sm:rounded-[32px]">
-      <div className="absolute inset-x-0 top-[116px] bottom-[88px] overflow-hidden" data-testid="map-canvas">
+      <div className="absolute inset-x-0 top-[116px] bottom-[92px] overflow-hidden" data-testid="map-canvas">
         {GOOGLE_MAPS_API_KEY ? (
           <GoogleEventMap
             apiKey={GOOGLE_MAPS_API_KEY}
@@ -308,11 +308,11 @@ export function HaraMap({ loadEvents = eventsApi.list }: { loadEvents?: LoadEven
         )}
       </div>
 
-      <div className="absolute inset-x-0 top-0 z-30 flex h-[116px] flex-col shadow-[0_12px_10px_rgba(0,0,0,.12)]">
-        <form role="search" onSubmit={submitSearch} className="flex h-16 gap-2 px-4 py-2">
-          <label className="flex h-12 min-w-0 flex-1 items-center gap-2 rounded-3xl bg-[#f3f5f7] px-3">
+      <div className="absolute inset-x-0 top-0 z-30 flex h-[116px] flex-col drop-shadow-[0_12px_10px_rgba(0,0,0,.12)]">
+        <form role="search" onSubmit={submitSearch} className="flex h-16 items-start gap-2 px-4 py-2">
+          <label className="flex h-12 min-w-0 flex-1 items-center gap-2 rounded-3xl bg-[#f3f5f7] px-3 py-2">
             <span className="sr-only">Xəritədə tədbir axtar</span>
-            <Image src="/figma/home/search.svg" alt="" width={24} height={24} />
+            <Image src="/figma/home/search.svg" alt="" width={24} height={24} className="size-6 shrink-0" />
             <input
               type="search"
               value={query}
@@ -321,7 +321,7 @@ export function HaraMap({ loadEvents = eventsApi.list }: { loadEvents?: LoadEven
                 setMode({ kind: "none" });
               }}
               placeholder="Caz, rooftop, sərgi..."
-              className="min-w-0 flex-1 bg-transparent text-[15px] leading-5 tracking-[-0.23px] text-black/70 outline-none placeholder:text-black/40"
+              className="min-w-0 flex-1 bg-transparent text-[15px] leading-5 tracking-[-0.23px] text-black/70 outline-none placeholder:text-black/[0.38]"
             />
           </label>
           <button
@@ -329,7 +329,7 @@ export function HaraMap({ loadEvents = eventsApi.list }: { loadEvents?: LoadEven
             aria-label="Xəritə filterləri"
             className="grid size-12 shrink-0 place-items-center rounded-full bg-[#f3f5f7] transition active:scale-95"
           >
-            <Image src="/figma/home/filter.svg" alt="" width={24} height={24} />
+            <Image src="/figma/map/filter.svg" alt="" width={24} height={24} className="size-6" />
           </button>
           <button
             type="button"
@@ -337,7 +337,7 @@ export function HaraMap({ loadEvents = eventsApi.list }: { loadEvents?: LoadEven
             onClick={() => setCenterRequest((value) => value + 1)}
             className="grid size-12 shrink-0 place-items-center rounded-full bg-[#f3f5f7] transition active:scale-95"
           >
-            <Image src="/figma/map/setting.svg" alt="" width={24} height={24} />
+            <Image src="/figma/map/setting.svg" alt="" width={24} height={24} className="size-6" />
           </button>
         </form>
 
@@ -387,7 +387,7 @@ export function HaraMap({ loadEvents = eventsApi.list }: { loadEvents?: LoadEven
 
       {selectedEvent ? (
         <section
-          className="absolute right-0 bottom-[88px] left-0 z-30 bg-white/32 px-4 py-3 backdrop-blur-[10px]"
+          className="absolute right-0 bottom-[92px] left-0 z-30 bg-white/32 px-4 py-3 backdrop-blur-[10px]"
           aria-label="Seçilmiş tədbir"
         >
           <MapEventCard event={selectedEvent} />
@@ -396,7 +396,7 @@ export function HaraMap({ loadEvents = eventsApi.list }: { loadEvents?: LoadEven
 
       {mode.kind === "cluster" && clusterEvents.length ? (
         <section
-          className="absolute right-0 bottom-[88px] left-0 z-30 bg-white/32 pt-3 pb-2 backdrop-blur-[10px]"
+          className="absolute right-0 bottom-[92px] left-0 z-30 bg-white/32 pt-3 pb-2 backdrop-blur-[10px]"
           aria-label="Yaxın tədbirlər"
         >
           <div className="scrollbar-none flex snap-x snap-mandatory gap-2.5 overflow-x-auto scroll-px-4 px-4">
@@ -410,7 +410,7 @@ export function HaraMap({ loadEvents = eventsApi.list }: { loadEvents?: LoadEven
         </section>
       ) : null}
 
-      <MobileTabBar active="map" />
+      <MobileTabBar active="map" placement="container" />
     </main>
   );
 }

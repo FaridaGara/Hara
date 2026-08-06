@@ -23,6 +23,14 @@ describe("Hara map", () => {
     expect(screen.getByRole("link", { name: "Xəritə" }).getAttribute("aria-current")).toBe("page");
     expect(screen.getByRole("link", { name: "Əsas səhifə" }).getAttribute("href")).toBe("/");
     expect(screen.getByTestId("map-canvas")).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "Əsas naviqasiya" }).className).toContain(
+      "h-[92px]",
+    );
+    expect(screen.getByRole("navigation", { name: "Əsas naviqasiya" }).className).toContain(
+      "absolute",
+    );
+    expect(container.querySelector('img[src="/figma/map/filter.svg"]')).toBeTruthy();
+    expect(container.querySelector('img[src="/figma/map/setting.svg"]')).toBeTruthy();
     expect(screen.queryByText("9:41")).toBeNull();
     expect(container.innerHTML).not.toContain("cellular");
     expect(container.innerHTML).not.toContain("battery");
