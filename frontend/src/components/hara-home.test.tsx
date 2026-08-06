@@ -30,6 +30,20 @@ describe("Hara home", () => {
     );
   });
 
+  it("Figma carousel boşluğunu və tarix formatını saxlayır", async () => {
+    const loadEvents = vi.fn().mockResolvedValue([eventFixture]);
+    render(<HaraHome loadEvents={loadEvents} />);
+    await screen.findAllByText(eventFixture.title);
+
+    const carousel = screen
+      .getByRole("region", { name: "Popular events" })
+      .querySelector(".snap-x");
+
+    expect(carousel).not.toBeNull();
+    expect(carousel?.classList.contains("scroll-px-4")).toBe(true);
+    expect(screen.getAllByText("10 Avqust • 22:00").length).toBeGreaterThan(0);
+  });
+
   it("search submit etdikdə API search filter-i ilə yenidən yükləyir", async () => {
     const loadEvents = vi.fn().mockResolvedValue([eventFixture]);
     render(<HaraHome loadEvents={loadEvents} />);

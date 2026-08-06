@@ -356,7 +356,7 @@ export function HaraHome({ loadEvents = eventsApi.list }: { loadEvents?: LoadEve
         ) : null}
 
         {featuredEvents.length ? (
-          <div className="scrollbar-none flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 touch-pan-x">
+          <div className="scrollbar-none flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-px-4 px-4 touch-pan-x">
             {featuredEvents.map((event, index) => (
               <FeaturedEventCard key={event.id} event={event} index={index} priority={index === 0} />
             ))}
