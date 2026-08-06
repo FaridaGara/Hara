@@ -12,6 +12,8 @@ import {
 } from "@/lib/api";
 import { formatBakuDate, safePosterUrl } from "@/lib/format";
 
+import { MobileTabBar } from "./mobile-tab-bar";
+
 type LoadEvents = (
   filters?: { search?: string; ordering?: "start_at" },
   signal?: AbortSignal,
@@ -23,13 +25,6 @@ type HomeState =
   | { kind: "error"; message: string };
 
 type EventWithTickets = HaraEvent & { ticket_types?: PublicTicketType[] };
-
-const NAV_ITEMS = [
-  { href: "/", label: "Əsas səhifə", icon: "/figma/home/home-active.svg", active: true },
-  { href: "#nearby-map", label: "Xəritə", icon: "/figma/home/map.svg", active: false },
-  { href: "/tickets", label: "Bilet", icon: "/figma/home/ticket.svg", active: false },
-  { href: "#more", label: "Daha çox", icon: "/figma/home/category.svg", active: false },
-] as const;
 
 function eventPrice(event: HaraEvent, from = false) {
   const tickets = (event as EventWithTickets).ticket_types;
@@ -262,29 +257,6 @@ export function EventRow({ event, index }: { event: HaraEvent; index: number }) 
   );
 }
 
-export function BottomTabBar() {
-  return (
-    <nav className="fixed right-0 bottom-0 left-0 z-30 mx-auto flex h-[88px] w-full max-w-[402px] flex-col border-t border-[#f2f2f2] bg-white/75 backdrop-blur-[10px]" aria-label="Əsas naviqasiya">
-      <div className="flex h-[54px] items-center px-4 pt-3">
-        {NAV_ITEMS.map((item) => (
-          <Link
-            key={item.label}
-            href={item.href}
-            aria-current={item.active ? "page" : undefined}
-            className="flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 text-[13px] leading-[18px] tracking-[-0.08px]"
-          >
-            <Image src={item.icon} alt="" width={24} height={24} className="size-6" />
-            <span className={item.active ? "text-[#565dd8]" : "text-black/40"}>{item.label}</span>
-          </Link>
-        ))}
-      </div>
-      <div className="relative h-[34px]">
-        <div className="absolute bottom-2 left-1/2 h-[5px] w-36 -translate-x-1/2 rounded-full bg-[#1a1a1a]" />
-      </div>
-    </nav>
-  );
-}
-
 export function HaraHome({ loadEvents = eventsApi.list }: { loadEvents?: LoadEvents }) {
   const [search, setSearch] = useState("");
   const [retryKey, setRetryKey] = useState(0);
@@ -377,7 +349,7 @@ export function HaraHome({ loadEvents = eventsApi.list }: { loadEvents?: LoadEve
         </div>
       </section>
 
-      <BottomTabBar />
+      <MobileTabBar active="home" />
     </main>
   );
 }
