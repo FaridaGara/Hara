@@ -40,6 +40,76 @@ describe("Hara map", () => {
     expect(container.innerHTML).not.toContain("battery");
   });
 
+  it("siyahı və xəritə görünüşləri arasında vəziyyəti itirmədən keçir", async () => {
+    render(<HaraMap loadEvents={vi.fn().mockResolvedValue([eventFixture, secondEvent])} />);
+
+    const mapCanvas = screen.getByTestId("map-canvas");
+    const listView = screen.getByTestId("event-list-view");
+    const listButton = await screen.findByRole("button", { name: "Siyahı görünüşünə keç" });
+
+    expect(mapCanvas.getAttribute("aria-hidden")).toBe("false");
+    expect(listView.getAttribute("aria-hidden")).toBe("true");
+    expect(listView.className).toContain("translate-x-full");
+
+    await userEvent.click(listButton);
+
+    expect(mapCanvas.getAttribute("aria-hidden")).toBe("true");
+    expect(mapCanvas.className).toContain("-translate-x-8");
+    expect(listView.getAttribute("aria-hidden")).toBe("false");
+    expect(listView.className).toContain("translate-x-0");
+    expect(listView.textContent).toContain(eventFixture.title);
+    expect(listView.textContent).toContain(secondEvent.title);
+    expect(listView.textContent).toContain("20 AZN-dən");
+
+    await userEvent.click(screen.getByRole("button", { name: "Xəritə görünüşünə keç" }));
+
+    expect(mapCanvas.getAttribute("aria-hidden")).toBe("false");
+    expect(mapCanvas.className).toContain("translate-x-0");
+    expect(listView.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("filteri xəritə və siyahı görünüşündə açır, X və kənar kliklə bağlayır", async () => {
+    render(<HaraMap loadEvents={vi.fn().mockResolvedValue([eventFixture, secondEvent])} />);
+
+    const filterButton = await screen.findByRole("button", { name: "Filterləri aç" });
+    await userEvent.click(filterButton);
+
+    expect(screen.getByRole("dialog", { name: "Filter" })).toBeTruthy();
+    expect(screen.getByText("Qiymət aralığı")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Tədbirləri göstər" })).toBeTruthy();
+
+    await userEvent.click(screen.getByRole("button", { name: "Filteri bağla" }));
+    expect(screen.queryByRole("dialog", { name: "Filter" })).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: "Siyahı görünüşünə keç" }));
+    await userEvent.click(screen.getByRole("button", { name: "Filterləri aç" }));
+    expect(screen.getByRole("dialog", { name: "Filter" })).toBeTruthy();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Filter pəncərəsinin xaricini bağla" }),
+    );
+    expect(screen.queryByRole("dialog", { name: "Filter" })).toBeNull();
+  });
+
+  it("qiymət filterini API tədbirlərinə tətbiq edir və sıfırlayır", async () => {
+    render(<HaraMap loadEvents={vi.fn().mockResolvedValue([eventFixture, secondEvent])} />);
+
+    await screen.findByRole("button", { name: "Filterləri aç" });
+    await userEvent.click(screen.getByRole("button", { name: "Siyahı görünüşünə keç" }));
+    await userEvent.click(screen.getByRole("button", { name: "Filterləri aç" }));
+    await userEvent.click(screen.getByRole("button", { name: "50+ AZN" }));
+    await userEvent.click(screen.getByRole("button", { name: "Tədbirləri göstər" }));
+
+    expect(screen.getByText("Uyğun tədbir tapılmadı.")).toBeTruthy();
+
+    await userEvent.click(screen.getByRole("button", { name: "Filterləri aç" }));
+    await userEvent.click(screen.getByRole("button", { name: "Filteri sıfırla" }));
+    await userEvent.click(screen.getByRole("button", { name: "Tədbirləri göstər" }));
+
+    expect(screen.queryByText("Uyğun tədbir tapılmadı.")).toBeNull();
+    expect(screen.getByTestId("event-list-view").textContent).toContain(eventFixture.title);
+  });
+
   it("pin seçiləndə API tədbirini Figma kartında açır", async () => {
     render(<HaraMap loadEvents={vi.fn().mockResolvedValue([eventFixture, secondEvent])} />);
 

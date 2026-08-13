@@ -45,6 +45,11 @@ button {
   padding-top: var(--hara-safe-top);
 }
 
+.hara-map-list {
+  top: calc(116px + var(--hara-safe-top));
+  bottom: calc(58px + var(--hara-safe-bottom));
+}
+
 .hara-map-feedback {
   top: calc(128px + var(--hara-safe-top));
 }
@@ -60,6 +65,48 @@ button {
 
 .hara-tab-bar-items {
   height: 58px;
+}
+
+.hara-price-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  height: 20px;
+  margin: 0;
+  pointer-events: none;
+  position: absolute;
+  width: 100%;
+}
+
+.hara-price-slider::-webkit-slider-runnable-track {
+  background: transparent;
+  height: 8px;
+}
+
+.hara-price-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  background: #ffffff;
+  border: 2px solid #565dd8;
+  border-radius: 999px;
+  height: 20px;
+  margin-top: -6px;
+  pointer-events: auto;
+  width: 20px;
+}
+
+.hara-price-slider::-moz-range-track {
+  background: transparent;
+  height: 8px;
+}
+
+.hara-price-slider::-moz-range-thumb {
+  background: #ffffff;
+  border: 2px solid #565dd8;
+  border-radius: 999px;
+  height: 16px;
+  pointer-events: auto;
+  width: 16px;
 }
 
 .sr-only {
