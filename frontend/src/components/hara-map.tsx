@@ -238,7 +238,7 @@ export function HaraMap({ loadEvents = eventsApi.list }: { loadEvents?: LoadEven
 
   return (
     <main className="hara-home relative mx-auto h-dvh min-h-[620px] w-full max-w-[402px] overflow-hidden bg-white text-[#18181a] sm:my-6 sm:h-[calc(100dvh-48px)] sm:rounded-[32px]">
-      <div className="absolute inset-x-0 top-[116px] bottom-[92px] overflow-hidden" data-testid="map-canvas">
+      <div className="absolute inset-0 overflow-hidden" data-testid="map-canvas">
         {GOOGLE_MAPS_API_KEY ? (
           <GoogleEventMap
             apiKey={GOOGLE_MAPS_API_KEY}
