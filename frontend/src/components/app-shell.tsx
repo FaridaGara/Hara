@@ -15,7 +15,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { status, logout } = useAuth();
-  const usesDiscoveryShell = pathname === "/" || pathname === "/map";
+  const usesDiscoveryShell = pathname === "/" || pathname === "/map" || pathname === "/more";
 
   const handleLogout = () => {
     logout();

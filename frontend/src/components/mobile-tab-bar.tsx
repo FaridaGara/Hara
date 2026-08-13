@@ -27,9 +27,9 @@ const NAV_ITEMS = [
   },
   {
     id: "more",
-    href: "#more",
+    href: "/more",
     label: "Daha çox",
-    activeIcon: "/figma/map/category.svg",
+    activeIcon: "/figma/more/category-active.svg",
     icon: "/figma/home/category.svg",
   },
 ] as const;

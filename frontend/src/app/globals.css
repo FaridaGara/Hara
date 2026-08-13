@@ -50,6 +50,16 @@ button {
   bottom: calc(58px + var(--hara-safe-bottom));
 }
 
+.hara-more-header {
+  height: calc(72px + var(--hara-safe-top));
+  padding-top: var(--hara-safe-top);
+}
+
+.hara-more-content {
+  top: calc(72px + var(--hara-safe-top));
+  bottom: calc(58px + var(--hara-safe-bottom));
+}
+
 .hara-map-feedback {
   top: calc(128px + var(--hara-safe-top));
 }
