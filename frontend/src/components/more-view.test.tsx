@@ -26,7 +26,7 @@ describe("More view", () => {
     );
 
     expect(screen.getByRole("heading", { name: "Profil" })).toBeTruthy();
-    expect(screen.getByText("Monika Aliyeva")).toBeTruthy();
+    expect(screen.getByText("HARA istifadəçisi")).toBeTruthy();
     expect(screen.getByText("Şəxsi məlumatlar")).toBeTruthy();
     expect(screen.getByText("Bildirişlər")).toBeTruthy();
     expect(screen.getByText("Məxfilik siyasəti")).toBeTruthy();

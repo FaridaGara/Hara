@@ -10,11 +10,12 @@ import { MobileTabBar } from "./mobile-tab-bar";
 type MenuItem = {
   label: string;
   icon: string;
+  href?: string;
   action?: "logout";
 };
 
 const ACCOUNT_ITEMS: MenuItem[] = [
-  { label: "Şəxsi məlumatlar", icon: "/figma/more/user.svg" },
+  { label: "Şəxsi məlumatlar", icon: "/figma/more/user.svg", href: "/personal-info" },
 ];
 
 const APP_ITEMS: MenuItem[] = [
@@ -41,15 +42,23 @@ function MenuRow({
   item,
   last,
   onLogout,
+  onNavigate,
 }: {
   item: MenuItem;
   last: boolean;
   onLogout: () => void;
+  onNavigate: (href: string) => void;
 }) {
   return (
     <button
       type="button"
-      onClick={item.action === "logout" ? onLogout : undefined}
+      onClick={
+        item.action === "logout"
+          ? onLogout
+          : item.href
+            ? () => onNavigate(item.href!)
+            : undefined
+      }
       className="flex min-h-16 w-full items-center gap-3 px-3 text-left transition active:bg-black/[0.03]"
     >
       <Image src={item.icon} alt="" width={24} height={24} className="size-6 shrink-0" />
@@ -77,10 +86,12 @@ function MenuSection({
   title,
   items,
   onLogout,
+  onNavigate,
 }: {
   title?: string;
   items: MenuItem[];
   onLogout: () => void;
+  onNavigate: (href: string) => void;
 }) {
   return (
     <section className="px-4 pb-3">
@@ -96,6 +107,7 @@ function MenuSection({
             item={item}
             last={index === items.length - 1}
             onLogout={onLogout}
+            onNavigate={onNavigate}
           />
         ))}
       </div>
@@ -105,8 +117,16 @@ function MenuSection({
 
 export function MoreView() {
   const router = useRouter();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const [favorite, setFavorite] = useState(false);
+  const fullName = [user?.first_name, user?.last_name].filter(Boolean).join(" ");
+  const displayName = user?.display_name || fullName || "HARA istifadəçisi";
+  const email = user?.email || "Profil məlumatları yüklənir…";
+  const avatarUrl = user?.avatar_url?.startsWith(
+    "https://lh3.googleusercontent.com/",
+  )
+    ? user.avatar_url
+    : "/figma/more/avatar.png";
 
   const handleLogout = () => {
     logout();
@@ -142,8 +162,8 @@ export function MoreView() {
         <section className="px-4 py-3" aria-label="Profil məlumatı">
           <div className="flex items-center gap-4 rounded-3xl bg-[#f3f5f7] py-3 pr-4 pl-3">
             <Image
-              src="/figma/more/avatar.png"
-              alt="Monika Aliyeva"
+              src={avatarUrl}
+              alt={displayName}
               width={64}
               height={64}
               priority
@@ -151,15 +171,16 @@ export function MoreView() {
             />
             <div className="min-w-0 flex-1">
               <p className="truncate text-xl leading-[25px] font-semibold tracking-[-0.45px] text-black/90">
-                Monika Aliyeva
+                {displayName}
               </p>
               <p className="mt-1 truncate text-[15px] leading-5 tracking-[-0.23px] text-black/[0.38]">
-                sn.alyva@example.com
+                {email}
               </p>
             </div>
             <button
               type="button"
               aria-label="Profil məlumatlarını redaktə et"
+              onClick={() => router.push("/personal-info?edit=1")}
               className="grid size-10 shrink-0 place-items-center rounded-full transition active:scale-95"
             >
               <Image src="/figma/more/edit.svg" alt="" width={24} height={24} className="size-6" />
@@ -167,10 +188,10 @@ export function MoreView() {
           </div>
         </section>
 
-        <MenuSection title="Hesab" items={ACCOUNT_ITEMS} onLogout={handleLogout} />
-        <MenuSection title="Tətbiq" items={APP_ITEMS} onLogout={handleLogout} />
-        <MenuSection title="Dəstək" items={SUPPORT_ITEMS} onLogout={handleLogout} />
-        <MenuSection items={ACCOUNT_ACTIONS} onLogout={handleLogout} />
+        <MenuSection title="Hesab" items={ACCOUNT_ITEMS} onLogout={handleLogout} onNavigate={router.push} />
+        <MenuSection title="Tətbiq" items={APP_ITEMS} onLogout={handleLogout} onNavigate={router.push} />
+        <MenuSection title="Dəstək" items={SUPPORT_ITEMS} onLogout={handleLogout} onNavigate={router.push} />
+        <MenuSection items={ACCOUNT_ACTIONS} onLogout={handleLogout} onNavigate={router.push} />
       </div>
 
       <MobileTabBar active="more" placement="container" />

@@ -1,12 +1,19 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 
-from .models import User
+from .models import SocialIdentity, User
+
+
+class SocialIdentityInline(admin.TabularInline):
+    model = SocialIdentity
+    extra = 0
+    readonly_fields = ("provider", "subject", "created_at", "updated_at")
 
 
 @admin.register(User)
 class HaraUserAdmin(UserAdmin):
     model = User
+    inlines = (SocialIdentityInline,)
     ordering = ("email",)
     list_display = (
         "email",
@@ -35,6 +42,7 @@ class HaraUserAdmin(UserAdmin):
                     "first_name",
                     "last_name",
                     "phone_number",
+                    "avatar_url",
                 )
             },
         ),

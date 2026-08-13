@@ -49,6 +49,9 @@ class User(AbstractUser):
     )
     display_name = models.CharField(max_length=150, blank=True)
     phone_number = models.CharField(max_length=32, blank=True)
+    avatar_url = models.URLField(blank=True)
+    birth_date = models.DateField(null=True, blank=True)
+    interests = models.JSONField(default=list, blank=True)
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []
@@ -57,3 +60,30 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.display_name or self.email
+
+
+class SocialIdentity(models.Model):
+    class Provider(models.TextChoices):
+        GOOGLE = "google", "Google"
+        APPLE = "apple", "Apple"
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="social_identities",
+    )
+    provider = models.CharField(max_length=16, choices=Provider.choices)
+    subject = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("provider", "subject"),
+                name="unique_social_provider_subject",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.provider}:{self.subject}"

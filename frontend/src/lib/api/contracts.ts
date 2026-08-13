@@ -56,6 +56,37 @@ export type AuthTokenPair = {
   refresh: string;
 };
 
+export type SocialProvider = "google" | "apple";
+
+export type UserProfile = {
+  id: number;
+  email: string;
+  display_name: string;
+  first_name: string;
+  last_name: string;
+  phone_number: string;
+  avatar_url: string;
+  birth_date: string | null;
+  interests: string[];
+  account_type: "attendee" | "organizer";
+  providers: SocialProvider[];
+};
+
+export type AuthSessionResponse = AuthTokenPair & {
+  user: UserProfile;
+};
+
+export type UserProfileUpdate = Pick<
+  UserProfile,
+  | "display_name"
+  | "first_name"
+  | "last_name"
+  | "phone_number"
+  | "avatar_url"
+  | "birth_date"
+  | "interests"
+>;
+
 export type AuthRefreshResponse = {
   access: string;
   refresh?: string;

@@ -1,19 +1,19 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 
-import { MoreView } from "@/components/more-view";
+import { PersonalInfoForm } from "@/components/personal-info-form";
 import { ProtectedRoute } from "@/components/protected-route";
 import { PageLoader } from "@/components/states";
 
 export const metadata: Metadata = {
-  title: "Profil — Hara",
+  title: "Şəxsi məlumatlar — Hara",
 };
 
-export default function MorePage() {
+export default function PersonalInfoPage() {
   return (
     <Suspense fallback={<PageLoader label="Profil yüklənir…" />}>
       <ProtectedRoute>
-        <MoreView />
+        <PersonalInfoForm />
       </ProtectedRoute>
     </Suspense>
   );

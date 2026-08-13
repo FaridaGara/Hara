@@ -217,6 +217,9 @@ ORDER_RESERVATION_MINUTES = int(
     os.getenv("ORDER_RESERVATION_MINUTES", "15")
 )
 
+GOOGLE_OAUTH_CLIENT_IDS = get_env_list("GOOGLE_OAUTH_CLIENT_IDS")
+APPLE_OAUTH_CLIENT_IDS = get_env_list("APPLE_OAUTH_CLIENT_IDS")
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",

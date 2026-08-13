@@ -8,6 +8,7 @@ import { ApiError } from "@/lib/api";
 import { safeLocalRedirect } from "@/lib/routes";
 
 import { useAuth } from "./auth-provider";
+import { SocialLoginButtons } from "./social-login-buttons";
 import { InlineError } from "./states";
 
 export function LoginForm() {
@@ -62,7 +63,14 @@ export function LoginForm() {
           Mövcud HARA hesabının email və şifrəsini istifadə et.
         </p>
 
-        <form onSubmit={handleSubmit} className="mt-7 space-y-5">
+        <SocialLoginButtons />
+        <div className="my-6 flex items-center gap-3 text-xs text-white/35">
+          <span className="h-px flex-1 bg-white/10" />
+          <span>və ya email ilə</span>
+          <span className="h-px flex-1 bg-white/10" />
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-5">
           <label className="block">
             <span className="text-sm font-semibold text-white/75">Email</span>
             <input
@@ -101,10 +109,6 @@ export function LoginForm() {
           </button>
         </form>
 
-        <p className="mt-6 rounded-xl bg-white/[0.04] px-4 py-3 text-xs leading-5 text-white/40">
-          Qeydiyyat API-si hələ mövcud deyil. Yeni hesab yaratmaq növbəti backend
-          mərhələsinə daxildir.
-        </p>
         <Link
           href="/"
           className="mt-3 grid min-h-11 place-items-center rounded-xl text-sm font-semibold text-white/50 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#98ff00]"

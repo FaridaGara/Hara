@@ -25,6 +25,11 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
+from apps.users.views import (
+    AppleSocialLoginAPIView,
+    GoogleSocialLoginAPIView,
+    UserProfileAPIView,
+)
 from events.views import (
     OrganizerEventDetailAPIView,
     OrganizerEventListCreateAPIView,
@@ -73,6 +78,21 @@ urlpatterns = [
         "api/auth/refresh/",
         TokenRefreshView.as_view(),
         name="auth-refresh",
+    ),
+    path(
+        "api/auth/social/google/",
+        GoogleSocialLoginAPIView.as_view(),
+        name="auth-google",
+    ),
+    path(
+        "api/auth/social/apple/",
+        AppleSocialLoginAPIView.as_view(),
+        name="auth-apple",
+    ),
+    path(
+        "api/auth/me/",
+        UserProfileAPIView.as_view(),
+        name="auth-profile",
     ),
     path(
         "api/organizer/events/",
