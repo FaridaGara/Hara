@@ -43,10 +43,10 @@ export function MobileTabBar({
 }) {
   return (
     <nav
-      className={`${placement === "container" ? "absolute" : "fixed"} right-0 bottom-0 left-0 z-40 mx-auto flex h-[92px] w-full max-w-[402px] flex-col border-t border-[#f2f2f2] bg-white/[0.72] backdrop-blur-[10px]`}
+      className={`${placement === "container" ? "absolute" : "fixed"} hara-tab-bar right-0 bottom-0 left-0 z-40 mx-auto flex w-full max-w-[402px] flex-col border-t border-[#f2f2f2] bg-white/[0.72] backdrop-blur-[10px]`}
       aria-label="Əsas naviqasiya"
     >
-      <div className="flex h-[58px] items-center px-4 pt-3">
+      <div className="hara-tab-bar-items flex shrink-0 items-center px-4 pt-3">
         {NAV_ITEMS.map((item) => {
           const isActive = active === item.id;
 
@@ -70,12 +70,6 @@ export function MobileTabBar({
             </Link>
           );
         })}
-      </div>
-      <div className="relative h-[34px]">
-        <div
-          aria-hidden="true"
-          className="absolute bottom-2 left-1/2 h-[5px] w-36 -translate-x-1/2 rounded-full bg-[#1a1a1a]"
-        />
       </div>
     </nav>
   );

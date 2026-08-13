@@ -4,6 +4,8 @@
   --background: #09090e;
   --foreground: #ffffff;
   color-scheme: dark;
+  --hara-safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --hara-safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
 }
 
 @theme inline {
@@ -36,6 +38,28 @@ input {
 a,
 button {
   -webkit-tap-highlight-color: transparent;
+}
+
+.hara-map-controls {
+  height: calc(116px + var(--hara-safe-top));
+  padding-top: var(--hara-safe-top);
+}
+
+.hara-map-feedback {
+  top: calc(128px + var(--hara-safe-top));
+}
+
+.hara-map-card-tray {
+  bottom: calc(58px + var(--hara-safe-bottom));
+}
+
+.hara-tab-bar {
+  height: calc(58px + var(--hara-safe-bottom));
+  padding-bottom: var(--hara-safe-bottom);
+}
+
+.hara-tab-bar-items {
+  height: 58px;
 }
 
 .sr-only {

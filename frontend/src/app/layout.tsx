@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 
 import { AppShell } from "@/components/app-shell";
 import { AuthProvider } from "@/components/auth-provider";
@@ -8,6 +8,13 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Hara — Bu həftə nə var?",
   description: "Şəhərdəki tədbirləri kəşf et.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#f3f5f7",
 };
 
 export default function RootLayout({

@@ -26,9 +26,10 @@ describe("Hara map", () => {
     expect(screen.getByTestId("map-canvas").className).toContain("inset-0");
     expect(screen.getByTestId("map-canvas").className).not.toContain("top-[116px]");
     expect(screen.getByTestId("map-canvas").className).not.toContain("bottom-[92px]");
-    expect(screen.getByRole("navigation", { name: "Əsas naviqasiya" }).className).toContain(
-      "h-[92px]",
-    );
+    const navigation = screen.getByRole("navigation", { name: "Əsas naviqasiya" });
+    expect(navigation.className).toContain("hara-tab-bar");
+    expect(navigation.className).not.toContain("h-[92px]");
+    expect(navigation.querySelector(".h-\\[5px\\]")).toBeNull();
     expect(screen.getByRole("navigation", { name: "Əsas naviqasiya" }).className).toContain(
       "absolute",
     );

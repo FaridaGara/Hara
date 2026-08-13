@@ -308,7 +308,7 @@ export function HaraMap({ loadEvents = eventsApi.list }: { loadEvents?: LoadEven
         )}
       </div>
 
-      <div className="absolute inset-x-0 top-0 z-30 flex h-[116px] flex-col drop-shadow-[0_12px_10px_rgba(0,0,0,.12)]">
+      <div className="hara-map-controls absolute inset-x-0 top-0 z-30 flex flex-col drop-shadow-[0_12px_10px_rgba(0,0,0,.12)]">
         <form role="search" onSubmit={submitSearch} className="flex h-16 items-start gap-2 px-4 py-2">
           <label className="flex h-12 min-w-0 flex-1 items-center gap-2 rounded-3xl bg-[#f3f5f7] px-3 py-2">
             <span className="sr-only">Xəritədə tədbir axtar</span>
@@ -368,26 +368,26 @@ export function HaraMap({ loadEvents = eventsApi.list }: { loadEvents?: LoadEven
       </div>
 
       {loading ? (
-        <div className="absolute top-[128px] left-4 z-20 rounded-full bg-white/85 px-3 py-2 text-xs text-black/55 shadow-sm">
+        <div className="hara-map-feedback absolute left-4 z-20 rounded-full bg-white/85 px-3 py-2 text-xs text-black/55 shadow-sm">
           Tədbirlər yüklənir…
         </div>
       ) : null}
 
       {error ? (
-        <div role="alert" className="absolute top-[128px] right-4 left-4 z-20 rounded-2xl bg-white/90 p-3 text-xs text-black/65 shadow-sm">
+        <div role="alert" className="hara-map-feedback absolute right-4 left-4 z-20 rounded-2xl bg-white/90 p-3 text-xs text-black/65 shadow-sm">
           {error}
         </div>
       ) : null}
 
       {!loading && !error && visibleEvents.length === 0 ? (
-        <div className="absolute top-[128px] right-4 left-4 z-20 rounded-2xl bg-white/90 p-3 text-xs text-black/65 shadow-sm">
+        <div className="hara-map-feedback absolute right-4 left-4 z-20 rounded-2xl bg-white/90 p-3 text-xs text-black/65 shadow-sm">
           Uyğun tədbir tapılmadı.
         </div>
       ) : null}
 
       {selectedEvent ? (
         <section
-          className="absolute right-0 bottom-[92px] left-0 z-30 bg-white/32 px-4 py-3 backdrop-blur-[10px]"
+          className="hara-map-card-tray absolute right-0 left-0 z-30 bg-white/32 px-4 py-3 backdrop-blur-[10px]"
           aria-label="Seçilmiş tədbir"
         >
           <MapEventCard event={selectedEvent} />
@@ -396,7 +396,7 @@ export function HaraMap({ loadEvents = eventsApi.list }: { loadEvents?: LoadEven
 
       {mode.kind === "cluster" && clusterEvents.length ? (
         <section
-          className="absolute right-0 bottom-[92px] left-0 z-30 bg-white/32 pt-3 pb-2 backdrop-blur-[10px]"
+          className="hara-map-card-tray absolute right-0 left-0 z-30 bg-white/32 pt-3 pb-2 backdrop-blur-[10px]"
           aria-label="Yaxın tədbirlər"
         >
           <div className="scrollbar-none flex snap-x snap-mandatory gap-2.5 overflow-x-auto scroll-px-4 px-4">
