@@ -166,8 +166,11 @@ export type Ticket = {
   event_start_at: string;
   event_end_at: string;
   event_location_name: string;
+  event_cover_image_url?: string;
   ticket_type_name: string;
   unit_price: string;
+  currency: string;
+  status: "valid" | "used" | "cancelled" | "refunded";
   owner_display_name: string;
   is_checked_in: boolean;
   checked_in_at: string | null;

@@ -20,8 +20,7 @@ export default async function TicketsPage({
 }) {
   const params = await searchParams;
   const rawPeriod = Array.isArray(params.period) ? params.period[0] : params.period;
-  const eventStatus =
-    rawPeriod === "upcoming" || rawPeriod === "past" ? rawPeriod : undefined;
+  const eventStatus = rawPeriod === "past" ? "past" : "upcoming";
 
   return (
     <Suspense fallback={<PageLoader label="Biletlər yüklənir…" />}>

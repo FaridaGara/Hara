@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { ApiError, ticketsApi } from "@/lib/api";
@@ -8,13 +9,32 @@ import { TicketDetail } from "./ticket-detail";
 import { TicketWallet } from "./ticket-wallet";
 
 describe("ticket wallet", () => {
-  it("owned ticket-ləri və check-in statusunu göstərir", async () => {
+  it("owned ticket-ləri Figma wallet kartında göstərir", async () => {
     render(
       <TicketWallet loadTickets={vi.fn().mockResolvedValue([ticketFixture])} />,
     );
 
     expect(await screen.findByText(ticketFixture.event_title)).toBeTruthy();
-    expect(screen.getByText("Check-in edilməyib")).toBeTruthy();
+    expect(screen.getByText("Aktiv")).toBeTruthy();
+    expect(screen.getByText("20 AZN")).toBeTruthy();
+  });
+
+  it("real bilet QR pəncərəsini açıb bağlayır", async () => {
+    const user = userEvent.setup();
+    render(<TicketWallet loadTickets={vi.fn().mockResolvedValue([ticketFixture])} />);
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Bakı Caz Axşamı bilet QR kodunu böyüt",
+      }),
+    );
+    expect(
+      screen.getByRole("dialog", { name: "Başlamağa az qaldı!" }),
+    ).toBeTruthy();
+    await user.click(
+      screen.getByRole("button", { name: "QR pəncərəsini bağla" }),
+    );
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("upcoming/past seçimini faktiki API filter contract-ına ötürür", async () => {

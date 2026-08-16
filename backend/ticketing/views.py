@@ -114,6 +114,7 @@ TICKET_RESPONSE_EXAMPLES = [
             "event_start_at": "2026-08-10T18:00:00Z",
             "event_end_at": "2026-08-10T20:00:00Z",
             "event_location_name": "Sample Venue",
+            "event_cover_image_url": "https://example.com/event.jpg",
             "ticket_type_name": "Standard",
             "unit_price": "20.00",
             "currency": "AZN",

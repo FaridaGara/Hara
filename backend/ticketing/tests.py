@@ -2337,6 +2337,7 @@ class TicketAndCheckInAPITests(APITestCase):
                 "event_start_at",
                 "event_end_at",
                 "event_location_name",
+                "event_cover_image_url",
                 "ticket_type_name",
                 "unit_price",
                 "currency",

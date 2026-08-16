@@ -22,7 +22,7 @@ const NAV_ITEMS = [
     id: "tickets",
     href: "/tickets",
     label: "Bilet",
-    activeIcon: "/figma/map/ticket.svg",
+    activeIcon: "/figma/tickets/ticket-active.svg",
     icon: "/figma/home/ticket.svg",
   },
   {

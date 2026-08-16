@@ -420,6 +420,10 @@ class TicketReadSerializer(serializers.ModelSerializer):
         source="event.venue.name",
         read_only=True,
     )
+    event_cover_image_url = serializers.URLField(
+        source="event.cover_image_url",
+        read_only=True,
+    )
     ticket_type_name = serializers.CharField(
         source="order_item.ticket_type.name",
         read_only=True,
@@ -453,6 +457,7 @@ class TicketReadSerializer(serializers.ModelSerializer):
             "event_start_at",
             "event_end_at",
             "event_location_name",
+            "event_cover_image_url",
             "ticket_type_name",
             "unit_price",
             "currency",
