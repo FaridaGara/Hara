@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 from datetime import timedelta
 from urllib.parse import parse_qsl, unquote, urlparse
+from corsheaders.defaults import default_headers
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -97,6 +98,11 @@ CORS_ALLOWED_ORIGINS = []
 for origin in default_cors_allowed_origins + get_env_list("CORS_ALLOWED_ORIGINS"):
     if origin not in CORS_ALLOWED_ORIGINS:
         CORS_ALLOWED_ORIGINS.append(origin)
+
+CORS_ALLOW_HEADERS = (
+    *default_headers,
+    "idempotency-key",
+)
 
 ROOT_URLCONF = 'config.urls'
 

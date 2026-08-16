@@ -27,3 +27,21 @@ class CorsConfigurationTests(SimpleTestCase):
                     HTTP_ACCESS_CONTROL_REQUEST_METHOD="GET",
                 )
                 self.assertEqual(response["access-control-allow-origin"], origin)
+
+    def test_order_preflight_allows_idempotency_key(self):
+        response = self.client.options(
+            "/api/orders/",
+            HTTP_ORIGIN="https://www.hara.today",
+            HTTP_ACCESS_CONTROL_REQUEST_METHOD="POST",
+            HTTP_ACCESS_CONTROL_REQUEST_HEADERS=(
+                "authorization,content-type,idempotency-key"
+            ),
+        )
+
+        allowed_headers = {
+            header.strip()
+            for header in response["access-control-allow-headers"].split(",")
+        }
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("idempotency-key", allowed_headers)
