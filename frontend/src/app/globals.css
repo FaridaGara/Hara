@@ -1,11 +1,67 @@
 @import "tailwindcss";
 
 :root {
-  --background: #09090e;
-  --foreground: #ffffff;
-  color-scheme: dark;
+  --background: #f2f2f2;
+  --foreground: #18181a;
+  --hara-page: #ffffff;
+  --hara-surface: #f3f5f7;
+  --hara-primary: rgba(0, 0, 0, 0.9);
+  --hara-secondary: rgba(0, 0, 0, 0.65);
+  --hara-muted: rgba(0, 0, 0, 0.38);
+  --hara-divider: #f2f2f2;
+  --hara-tab-bg: rgba(255, 255, 255, 0.72);
+  --hara-tab-border: #f2f2f2;
+  --hara-tab-active: #565dd8;
+  --hara-weekly-price: #565dd8;
+  --hara-weekly-price-text: #ffffff;
+  --hara-retry-bg: #18181a;
+  --hara-retry-text: #ffffff;
+  --hara-badge-border: #ffffff;
+  color-scheme: light;
   --hara-safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
   --hara-safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+}
+
+:root[data-theme="dark"] {
+  --background: #09090e;
+  --foreground: #ffffff;
+  --hara-page: #111118;
+  --hara-surface: #1f1f33;
+  --hara-primary: #ffffff;
+  --hara-secondary: rgba(255, 255, 255, 0.65);
+  --hara-muted: rgba(255, 255, 255, 0.38);
+  --hara-divider: #1a1a1a;
+  --hara-tab-bg: rgba(17, 17, 24, 0.72);
+  --hara-tab-border: #1a1a1a;
+  --hara-tab-active: #98ff00;
+  --hara-weekly-price: #98ff00;
+  --hara-weekly-price-text: rgba(0, 0, 0, 0.9);
+  --hara-retry-bg: #98ff00;
+  --hara-retry-text: #18181a;
+  --hara-badge-border: #111118;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --background: #09090e;
+    --foreground: #ffffff;
+    --hara-page: #111118;
+    --hara-surface: #1f1f33;
+    --hara-primary: #ffffff;
+    --hara-secondary: rgba(255, 255, 255, 0.65);
+    --hara-muted: rgba(255, 255, 255, 0.38);
+    --hara-divider: #1a1a1a;
+    --hara-tab-bg: rgba(17, 17, 24, 0.72);
+    --hara-tab-border: #1a1a1a;
+    --hara-tab-active: #98ff00;
+    --hara-weekly-price: #98ff00;
+    --hara-weekly-price-text: rgba(0, 0, 0, 0.9);
+    --hara-retry-bg: #98ff00;
+    --hara-retry-text: #18181a;
+    --hara-badge-border: #111118;
+    color-scheme: dark;
+  }
 }
 
 @theme inline {
@@ -23,7 +79,33 @@ body {
 
 .hara-home {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Inter, Arial, sans-serif;
-  color-scheme: light;
+  background: var(--hara-page);
+  color: var(--hara-primary);
+}
+
+.theme-dark-only {
+  display: none;
+}
+
+:root[data-theme="dark"] .theme-light-only {
+  display: none;
+}
+
+:root[data-theme="dark"] .theme-dark-only {
+  display: block;
+}
+
+.hara-theme-icon {
+  filter: none;
+}
+
+:root[data-theme="dark"] .hara-theme-icon {
+  filter: brightness(0) invert(1);
+}
+
+.hara-home-header {
+  height: calc(72px + var(--hara-safe-top));
+  padding-top: calc(16px + var(--hara-safe-top));
 }
 
 * {

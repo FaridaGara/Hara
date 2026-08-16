@@ -9,6 +9,7 @@ const NAV_ITEMS = [
     href: "/",
     label: "Əsas səhifə",
     activeIcon: "/figma/home/home-active.svg",
+    darkActiveIcon: "/figma/home-dark/home-active.svg",
     icon: "/figma/map/home.svg",
   },
   {
@@ -16,6 +17,7 @@ const NAV_ITEMS = [
     href: "/map",
     label: "Xəritə",
     activeIcon: "/figma/map/map-active.svg",
+    darkActiveIcon: "/figma/map/map-active.svg",
     icon: "/figma/home/map.svg",
   },
   {
@@ -23,6 +25,7 @@ const NAV_ITEMS = [
     href: "/tickets",
     label: "Bilet",
     activeIcon: "/figma/tickets/ticket-active.svg",
+    darkActiveIcon: "/figma/tickets/ticket-active.svg",
     icon: "/figma/home/ticket.svg",
   },
   {
@@ -30,6 +33,7 @@ const NAV_ITEMS = [
     href: "/more",
     label: "Daha çox",
     activeIcon: "/figma/more/category-active.svg",
+    darkActiveIcon: "/figma/more/category-active.svg",
     icon: "/figma/home/category.svg",
   },
 ] as const;
@@ -37,14 +41,26 @@ const NAV_ITEMS = [
 export function MobileTabBar({
   active,
   placement = "viewport",
+  theme = "light",
 }: {
   active: ActiveTab;
   placement?: "viewport" | "container";
+  theme?: "light" | "dark" | "adaptive";
 }) {
+  const isDark = theme === "dark";
+  const isAdaptive = theme === "adaptive";
+
   return (
     <nav
-      className={`${placement === "container" ? "absolute" : "fixed"} hara-tab-bar right-0 bottom-0 left-0 z-40 mx-auto flex w-full max-w-[402px] flex-col border-t border-[#f2f2f2] bg-white/[0.72] backdrop-blur-[10px]`}
+      className={`${placement === "container" ? "absolute" : "fixed"} hara-tab-bar right-0 bottom-0 left-0 z-40 mx-auto flex w-full max-w-[402px] flex-col border-t backdrop-blur-[10px] ${
+        isAdaptive
+          ? "border-[var(--hara-tab-border)] bg-[var(--hara-tab-bg)]"
+          : isDark
+          ? "border-[#1a1a1a] bg-[#111118]/[0.72]"
+          : "border-[#f2f2f2] bg-white/[0.72]"
+      }`}
       aria-label="Əsas naviqasiya"
+      data-theme={theme}
     >
       <div className="hara-tab-bar-items flex shrink-0 items-center px-4 pt-3">
         {NAV_ITEMS.map((item) => {
@@ -57,14 +73,45 @@ export function MobileTabBar({
               aria-current={isActive ? "page" : undefined}
               className="flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-3 text-[13px] leading-[18px] tracking-[-0.08px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#565dd8]"
             >
-              <Image
-                src={isActive ? item.activeIcon : item.icon}
-                alt=""
-                width={24}
-                height={24}
-                className="size-6"
-              />
-              <span className={isActive ? "text-[#565dd8]" : "text-black/[0.38]"}>
+              {isAdaptive && isActive ? (
+                <span
+                  aria-hidden="true"
+                  className="size-6 bg-[var(--hara-tab-active)]"
+                  style={{
+                    WebkitMaskImage: `url("${item.activeIcon}")`,
+                    maskImage: `url("${item.activeIcon}")`,
+                    WebkitMaskPosition: "center",
+                    maskPosition: "center",
+                    WebkitMaskRepeat: "no-repeat",
+                    maskRepeat: "no-repeat",
+                    WebkitMaskSize: "contain",
+                    maskSize: "contain",
+                  }}
+                />
+              ) : (
+                <Image
+                  src={isActive ? (isDark ? item.darkActiveIcon : item.activeIcon) : item.icon}
+                  alt=""
+                  width={24}
+                  height={24}
+                  className={isAdaptive ? "hara-theme-icon size-6 opacity-40" : "size-6"}
+                />
+              )}
+              <span
+                className={
+                  isActive
+                    ? isAdaptive
+                      ? "text-[var(--hara-tab-active)]"
+                      : isDark
+                      ? "text-[#98ff00]"
+                      : "text-[#565dd8]"
+                    : isAdaptive
+                      ? "text-[var(--hara-muted)]"
+                      : isDark
+                      ? "text-white/[0.38]"
+                      : "text-black/[0.38]"
+                }
+              >
                 {item.label}
               </span>
             </Link>

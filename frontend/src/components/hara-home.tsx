@@ -62,6 +62,23 @@ function EventImage({
   );
 }
 
+function AdaptiveIcon({
+  lightSrc,
+  darkSrc,
+  size,
+}: {
+  lightSrc: string;
+  darkSrc: string;
+  size: number;
+}) {
+  return (
+    <span className="relative block shrink-0" style={{ width: size, height: size }}>
+      <Image src={lightSrc} alt="" fill sizes={`${size}px`} className="theme-light-only" />
+      <Image src={darkSrc} alt="" fill sizes={`${size}px`} className="theme-dark-only" />
+    </span>
+  );
+}
+
 function FavoriteButton({ light = false, compact = false }: { light?: boolean; compact?: boolean }) {
   const [selected, setSelected] = useState(false);
 
@@ -72,37 +89,43 @@ function FavoriteButton({ light = false, compact = false }: { light?: boolean; c
       aria-pressed={selected}
       onClick={() => setSelected((value) => !value)}
       className={`relative z-10 grid shrink-0 place-items-center rounded-full transition active:scale-95 ${
-        light ? "size-8 bg-white/12" : compact ? "size-8 bg-transparent" : "size-10 bg-[#f3f5f7]"
+        light
+          ? "size-8 bg-white/12"
+          : compact
+            ? "size-8 bg-transparent"
+            : "size-10 bg-[var(--hara-surface)]"
       }`}
     >
-      <Image
-        src={light ? "/figma/home/heart-light.svg" : "/figma/home/heart-dark.svg"}
-        alt=""
-        width={light || compact ? 16 : 24}
-        height={light || compact ? 16 : 24}
-        className={selected ? "opacity-100" : undefined}
-      />
+      {light ? (
+        <Image src="/figma/home/heart-light.svg" alt="" width={16} height={16} />
+      ) : (
+        <AdaptiveIcon
+          lightSrc="/figma/home/heart-dark.svg"
+          darkSrc={compact ? "/figma/home/heart-light.svg" : "/figma/home-dark/header-heart.svg"}
+          size={compact ? 16 : 24}
+        />
+      )}
     </button>
   );
 }
 
 export function Header() {
   return (
-    <header className="flex h-[72px] items-center gap-3 px-4 py-4">
+    <header className="hara-home-header flex items-center gap-3 px-4 pb-4">
       <div className="flex min-w-0 flex-1 items-center gap-3.5">
         <Image
-          src="/figma/home/avatar.png"
-          alt="Monika"
-          width={40}
-          height={40}
-          className="size-10 shrink-0 rounded-full object-cover object-[50%_8%]"
+          src="/figma/home/hara-logo-32.svg"
+          alt=""
+          width={32}
+          height={32}
+          className="size-8 shrink-0"
           priority
         />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[16px] leading-[21px] font-semibold tracking-[-0.31px] text-black/90">
+          <p className="truncate text-[16px] leading-[21px] font-semibold tracking-[-0.31px] text-[var(--hara-primary)]">
             Salam, Monika 👋
           </p>
-          <p className="truncate text-[13px] leading-[18px] tracking-[-0.08px] text-black/40">
+          <p className="truncate text-[13px] leading-[18px] tracking-[-0.08px] text-[var(--hara-muted)]">
             Bu gün nə etmək istəyirsən?
           </p>
         </div>
@@ -111,11 +134,15 @@ export function Header() {
         <FavoriteButton />
         <button
           type="button"
-          className="relative grid size-10 place-items-center rounded-full bg-[#f3f5f7] transition active:scale-95"
+          className="relative grid size-10 place-items-center rounded-full bg-[var(--hara-surface)] transition active:scale-95"
           aria-label="Bildirişlər"
         >
-          <Image src="/figma/home/notification.svg" alt="" width={24} height={24} />
-          <span className="absolute -top-1 -right-0.5 grid size-5 place-items-center rounded-full border border-white bg-[#ff2c3d] text-[9px] leading-3 font-medium text-white">
+          <AdaptiveIcon
+            lightSrc="/figma/home/notification.svg"
+            darkSrc="/figma/home-dark/notification.svg"
+            size={24}
+          />
+          <span className="absolute -top-1 -right-0.5 grid size-5 place-items-center rounded-full border border-[var(--hara-badge-border)] bg-[#ff2c3d] text-[9px] leading-3 font-medium text-white">
             9+
           </span>
         </button>
@@ -134,7 +161,7 @@ export function SearchBar({ onSearch }: { onSearch: (query: string) => void }) {
 
   return (
     <form role="search" onSubmit={submit} className="flex h-[72px] gap-2 px-4 py-3">
-      <label className="flex h-12 min-w-0 flex-1 items-center gap-2 rounded-3xl bg-[#f3f5f7] px-3">
+      <label className="flex h-12 min-w-0 flex-1 items-center gap-2 rounded-3xl bg-[var(--hara-surface)] px-3">
         <span className="sr-only">Tədbir axtar</span>
         <Image src="/figma/home/search.svg" alt="" width={24} height={24} />
         <input
@@ -142,15 +169,19 @@ export function SearchBar({ onSearch }: { onSearch: (query: string) => void }) {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Caz, rooftop, sərgi..."
-          className="min-w-0 flex-1 bg-transparent text-[15px] leading-5 tracking-[-0.23px] text-black/70 outline-none placeholder:text-black/40"
+          className="min-w-0 flex-1 bg-transparent text-[15px] leading-5 tracking-[-0.23px] text-[var(--hara-secondary)] outline-none placeholder:text-[var(--hara-muted)]"
         />
       </label>
       <button
         type="submit"
-        className="grid size-12 shrink-0 place-items-center rounded-full bg-[#f3f5f7] transition active:scale-95"
+        className="grid size-12 shrink-0 place-items-center rounded-full bg-[var(--hara-surface)] transition active:scale-95"
         aria-label="Axtar"
       >
-        <Image src="/figma/home/filter.svg" alt="" width={24} height={24} />
+        <AdaptiveIcon
+          lightSrc="/figma/home/filter.svg"
+          darkSrc="/figma/home-dark/filter.svg"
+          size={24}
+        />
       </button>
     </form>
   );
@@ -233,9 +264,9 @@ export function EventRow({ event, index }: { event: HaraEvent; index: number }) 
       <div className="relative size-[120px] shrink-0 overflow-hidden rounded-3xl bg-[#111]">
         <EventImage event={event} fallback={index % 2 ? "/figma/networking.png" : "/figma/jazz.png"} />
       </div>
-      <div className="flex min-w-0 flex-1 flex-col border-b border-[#f2f2f2]">
+      <div className="flex min-w-0 flex-1 flex-col border-b border-[var(--hara-divider)]">
         <div className="flex h-10 items-start gap-2">
-          <h3 className="line-clamp-2 min-w-0 flex-1 text-[15px] leading-5 font-semibold tracking-[-0.23px] text-black/90">
+          <h3 className="line-clamp-2 min-w-0 flex-1 text-[15px] leading-5 font-semibold tracking-[-0.23px] text-[var(--hara-primary)]">
             <Link
               href={`/events/${encodeURIComponent(event.slug)}`}
               className="after:absolute after:inset-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#565dd8]"
@@ -247,9 +278,9 @@ export function EventRow({ event, index }: { event: HaraEvent; index: number }) 
         </div>
         <div className="mt-3 min-w-0 text-[11px] leading-[13px] tracking-[0.06px]">
           <p className="truncate text-[#4e55c5]">{formatBakuDate(event.start_at, true)}</p>
-          <p className="mt-1 truncate text-black/65">{event.venue.name}</p>
+          <p className="mt-1 truncate text-[var(--hara-secondary)]">{event.venue.name}</p>
         </div>
-        <span className="mt-3 w-fit rounded-lg bg-[#565dd8] px-2 py-1 text-xs leading-4 text-white">
+        <span className="mt-3 w-fit rounded-lg bg-[var(--hara-weekly-price)] px-2 py-1 text-xs leading-4 text-[var(--hara-weekly-price-text)]">
           {eventPrice(event, true)}
         </span>
       </div>
@@ -290,31 +321,31 @@ export function HaraHome({ loadEvents = eventsApi.list }: { loadEvents?: LoadEve
   };
 
   return (
-    <main className="hara-home relative mx-auto min-h-dvh w-full max-w-[402px] overflow-x-hidden bg-white pb-[108px] text-[#18181a] sm:my-6 sm:min-h-[calc(100dvh-48px)] sm:rounded-[32px]">
+    <main className="hara-home relative mx-auto min-h-dvh w-full max-w-[402px] overflow-x-hidden pb-[108px] transition-colors sm:my-6 sm:min-h-[calc(100dvh-48px)] sm:rounded-[32px]">
       <Header />
       <SearchBar onSearch={searchAgain} />
 
       <section className="flex flex-col gap-3 py-3" aria-labelledby="featured-heading">
-        <h1 id="featured-heading" className="px-4 text-[34px] leading-[41px] font-bold tracking-[0.4px] text-black/90">
+        <h1 id="featured-heading" className="px-4 text-[34px] leading-[41px] font-bold tracking-[0.4px] text-[var(--hara-primary)]">
           Popular events
         </h1>
 
         {state.kind === "loading" ? (
-          <div className="mx-4 h-[200px] animate-pulse rounded-tl-3xl rounded-tr-lg rounded-br-3xl rounded-bl-lg bg-[#f3f5f7]">
+          <div className="mx-4 h-[200px] animate-pulse rounded-tl-3xl rounded-tr-lg rounded-br-3xl rounded-bl-lg bg-[var(--hara-surface)]">
             <span className="sr-only">Tədbirlər yüklənir…</span>
           </div>
         ) : null}
 
         {state.kind === "error" ? (
-          <div className="mx-4 flex h-[200px] flex-col items-start justify-center rounded-3xl bg-[#f3f5f7] p-5" role="alert">
-            <p className="text-sm text-black/65">{state.message}</p>
+          <div className="mx-4 flex h-[200px] flex-col items-start justify-center rounded-3xl bg-[var(--hara-surface)] p-5" role="alert">
+            <p className="text-sm text-[var(--hara-secondary)]">{state.message}</p>
             <button
               type="button"
               onClick={() => {
                 setState({ kind: "loading" });
                 setRetryKey((value) => value + 1);
               }}
-              className="mt-3 min-h-10 rounded-full bg-[#18181a] px-4 text-sm font-bold text-white"
+              className="mt-3 min-h-10 rounded-full bg-[var(--hara-retry-bg)] px-4 text-sm font-bold text-[var(--hara-retry-text)]"
             >
               Yenidən cəhd et
             </button>
@@ -322,7 +353,7 @@ export function HaraHome({ loadEvents = eventsApi.list }: { loadEvents?: LoadEve
         ) : null}
 
         {state.kind === "success" && events.length === 0 ? (
-          <div className="mx-4 grid h-[200px] place-items-center rounded-3xl bg-[#f3f5f7] px-5 text-sm text-black/45">
+          <div className="mx-4 grid h-[200px] place-items-center rounded-3xl bg-[var(--hara-surface)] px-5 text-sm text-[var(--hara-muted)]">
             Uyğun tədbir tapılmadı.
           </div>
         ) : null}
@@ -339,7 +370,7 @@ export function HaraHome({ loadEvents = eventsApi.list }: { loadEvents?: LoadEve
       <NearbyMapCard count={events.length || 14} />
 
       <section id="weekly-events" className="flex flex-col gap-3 px-4 py-3" aria-labelledby="weekly-heading">
-        <h2 id="weekly-heading" className="text-[20px] leading-[25px] font-semibold tracking-[-0.45px] text-black/85">
+        <h2 id="weekly-heading" className="text-[20px] leading-[25px] font-semibold tracking-[-0.45px] text-[var(--hara-primary)]">
           Bu həftə nə var?
         </h2>
         <div className="flex flex-col gap-3">
@@ -349,7 +380,7 @@ export function HaraHome({ loadEvents = eventsApi.list }: { loadEvents?: LoadEve
         </div>
       </section>
 
-      <MobileTabBar active="home" />
+      <MobileTabBar active="home" theme="adaptive" />
     </main>
   );
 }

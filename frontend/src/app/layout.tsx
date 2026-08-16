@@ -1,7 +1,12 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 
 import { AppShell } from "@/components/app-shell";
 import { AuthProvider } from "@/components/auth-provider";
+import {
+  THEME_INIT_SCRIPT,
+  ThemeProvider,
+} from "@/components/theme-provider";
 
 import "./globals.css";
 
@@ -14,7 +19,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#f3f5f7",
+  themeColor: "#111118",
 };
 
 export default function RootLayout({
@@ -23,11 +28,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="az">
+    <html lang="az" suppressHydrationWarning>
       <body>
-        <AuthProvider>
-          <AppShell>{children}</AppShell>
-        </AuthProvider>
+        <Script id="hara-theme-init" strategy="beforeInteractive">
+          {THEME_INIT_SCRIPT}
+        </Script>
+        <ThemeProvider>
+          <AuthProvider>
+            <AppShell>{children}</AppShell>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

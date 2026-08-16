@@ -74,9 +74,23 @@ describe("Hara home", () => {
   });
 
   it("Figma tab bar-da əsas səhifəni aktiv göstərir", () => {
-    render(<HaraHome loadEvents={vi.fn().mockResolvedValue([])} />);
+    const { container } = render(<HaraHome loadEvents={vi.fn().mockResolvedValue([])} />);
     const homeLink = screen.getByRole("link", { name: "Əsas səhifə" });
+    const tabBar = screen.getByRole("navigation", { name: "Əsas naviqasiya" });
+
     expect(homeLink.getAttribute("aria-current")).toBe("page");
+    expect(tabBar.getAttribute("data-theme")).toBe("adaptive");
+    expect(container.innerHTML).toContain("/figma/home/home-active.svg");
+    expect(container.innerHTML).toContain("bg-[var(--hara-tab-active)]");
+  });
+
+  it("light və dark rejimdə eyni Figma HARA loqosunu saxlayır", () => {
+    const { container } = render(<HaraHome loadEvents={vi.fn().mockResolvedValue([])} />);
+    const main = container.querySelector("main.hara-home");
+
+    expect(main?.classList.contains("transition-colors")).toBe(true);
+    expect(container.innerHTML).toContain("/figma/home/hara-logo-32.svg");
+    expect(container.innerHTML).not.toContain("/figma/home/avatar.png");
   });
 
   it("telefonun sistem status bar-ını tətbiq UI-sində göstərmir", () => {
