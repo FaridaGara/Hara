@@ -241,7 +241,7 @@ export function NearbyMapCard({ count }: { count: number }) {
         <Image className="absolute top-[42px] right-[18px]" src="/figma/home/map-dot-lg.svg" alt="" width={28} height={28} />
         <Image className="absolute top-[82px] right-[8px]" src="/figma/home/map-dot-sm.svg" alt="" width={20} height={20} />
         <div className="relative whitespace-nowrap">
-          <h2 id="map-heading" className="text-[20px] leading-6 font-bold text-[#18181a]">
+          <h2 id="map-heading" className="text-[18px] leading-6 font-bold text-[#18181a] min-[360px]:text-[20px]">
             Ətrafımda nə verir baş?
           </h2>
           <p className="mt-1 text-sm leading-5 text-black/65">Yaxında olan {count} tədbirə göz at</p>
@@ -326,7 +326,7 @@ export function HaraHome({ loadEvents = eventsApi.list }: { loadEvents?: LoadEve
       <SearchBar onSearch={searchAgain} />
 
       <section className="flex flex-col gap-3 py-3" aria-labelledby="featured-heading">
-        <h1 id="featured-heading" className="px-4 text-[34px] leading-[41px] font-bold tracking-[0.4px] text-[var(--hara-primary)]">
+        <h1 id="featured-heading" className="px-4 text-[30px] leading-[37px] font-bold tracking-[0.4px] text-[var(--hara-primary)] min-[360px]:text-[34px] min-[360px]:leading-[41px]">
           Popular events
         </h1>
 

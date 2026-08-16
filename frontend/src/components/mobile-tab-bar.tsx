@@ -62,7 +62,7 @@ export function MobileTabBar({
       aria-label="Əsas naviqasiya"
       data-theme={theme}
     >
-      <div className="hara-tab-bar-items flex shrink-0 items-center px-4 pt-3">
+      <div className="hara-tab-bar-items flex shrink-0 items-center px-2 pt-3 min-[360px]:px-4">
         {NAV_ITEMS.map((item) => {
           const isActive = active === item.id;
 
@@ -71,7 +71,7 @@ export function MobileTabBar({
               key={item.id}
               href={item.href}
               aria-current={isActive ? "page" : undefined}
-              className="flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-3 text-[13px] leading-[18px] tracking-[-0.08px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#565dd8]"
+              className="flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 text-[12px] leading-[18px] tracking-[-0.08px] min-[360px]:px-2 min-[360px]:text-[13px] min-[390px]:px-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#565dd8]"
             >
               {isAdaptive && isActive ? (
                 <span
@@ -98,7 +98,7 @@ export function MobileTabBar({
                 />
               )}
               <span
-                className={
+                className={`whitespace-nowrap ${
                   isActive
                     ? isAdaptive
                       ? "text-[var(--hara-tab-active)]"
@@ -110,7 +110,7 @@ export function MobileTabBar({
                       : isDark
                       ? "text-white/[0.38]"
                       : "text-black/[0.38]"
-                }
+                }`}
               >
                 {item.label}
               </span>

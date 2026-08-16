@@ -41,6 +41,8 @@ describe("Hara home", () => {
 
     expect(carousel).not.toBeNull();
     expect(carousel?.classList.contains("scroll-px-4")).toBe(true);
+    expect(screen.getByRole("heading", { name: "Popular events" }).classList.contains("text-[30px]")).toBe(true);
+    expect(screen.getByRole("heading", { name: "Popular events" }).classList.contains("min-[360px]:text-[34px]")).toBe(true);
     expect(screen.getAllByText("10 Avqust • 22:00").length).toBeGreaterThan(0);
   });
 
@@ -82,6 +84,9 @@ describe("Hara home", () => {
     expect(tabBar.getAttribute("data-theme")).toBe("adaptive");
     expect(container.innerHTML).toContain("/figma/home/home-active.svg");
     expect(container.innerHTML).toContain("bg-[var(--hara-tab-active)]");
+    expect(homeLink.classList.contains("text-[12px]")).toBe(true);
+    expect(homeLink.classList.contains("min-[360px]:text-[13px]")).toBe(true);
+    expect(homeLink.querySelector("span:last-child")?.classList.contains("whitespace-nowrap")).toBe(true);
   });
 
   it("light və dark rejimdə eyni Figma HARA loqosunu saxlayır", () => {
