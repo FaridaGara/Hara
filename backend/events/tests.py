@@ -12,7 +12,15 @@ from rest_framework.test import APITestCase
 
 from ticketing.models import Order, OrderItem, Ticket, TicketType
 
-from .models import Category, Event, Favorite, Venue
+from .models import (
+    Category,
+    Event,
+    Favorite,
+    Venue,
+    VenuePlan,
+    VenueSeat,
+    VenueSection,
+)
 
 
 class FavoriteAPITests(APITestCase):
@@ -394,6 +402,8 @@ class PublicEventTicketTypeContractTests(APITestCase):
             {
                 "id",
                 "name",
+                "venue_section_id",
+                "venue_section",
                 "price",
                 "currency",
                 "available_quantity",
@@ -911,4 +921,184 @@ class OrganizerEventAPITests(APITestCase):
         self.assertEqual(
             response.status_code,
             status.HTTP_409_CONFLICT,
+        )
+
+
+class VenuePlanAPITests(APITestCase):
+    @classmethod
+    def setUpTestData(cls):
+        user_model = get_user_model()
+        cls.organizer = user_model.objects.create_user(
+            email="venue-plan-organizer@hara.today",
+            password="StrongPass123!",
+            account_type="organizer",
+        )
+        cls.other_organizer = user_model.objects.create_user(
+            email="venue-plan-other@hara.today",
+            password="StrongPass123!",
+            account_type="organizer",
+        )
+        cls.category = Category.objects.create(
+            name="Venue plan music",
+            slug="venue-plan-music",
+        )
+
+    def setUp(self):
+        self.client.force_authenticate(user=self.organizer)
+
+    def create_venue_with_plan(self):
+        return self.client.post(
+            reverse("organizer-venue-list"),
+            {
+                "name": "Planlı Konsert Zalı",
+                "city": "Bakı",
+                "address": "İstiqlaliyyət küçəsi 10",
+                "latitude": 40.364,
+                "longitude": 49.831,
+                "plan": {
+                    "name": "Əsas zal",
+                    "background_image_url": (
+                        "https://cdn.hara.today/venue-plans/main-hall.svg"
+                    ),
+                    "canvas_width": 1200,
+                    "canvas_height": 900,
+                    "status": VenuePlan.Status.PUBLISHED,
+                    "is_default": True,
+                    "sections": [
+                        {
+                            "code": "A",
+                            "name": "A zona",
+                            "seating_type": (
+                                VenueSection.SeatingType.RESERVED_SEATING
+                            ),
+                            "color": "#5B5CE2",
+                            "capacity": 2,
+                            "geometry": {
+                                "type": "polygon",
+                                "points": [[0, 0], [400, 0], [400, 300]],
+                            },
+                            "seats": [
+                                {
+                                    "row_label": "1",
+                                    "seat_number": "1",
+                                    "x": "100.000",
+                                    "y": "100.000",
+                                },
+                                {
+                                    "row_label": "1",
+                                    "seat_number": "2",
+                                    "x": "140.000",
+                                    "y": "100.000",
+                                    "is_accessible": True,
+                                },
+                            ],
+                        },
+                        {
+                            "code": "B",
+                            "name": "B zona",
+                            "seating_type": (
+                                VenueSection.SeatingType.GENERAL_ADMISSION
+                            ),
+                            "color": "#8B5CF6",
+                            "capacity": 100,
+                            "geometry": {
+                                "type": "polygon",
+                                "points": [[0, 350], [600, 350], [600, 800]],
+                            },
+                        },
+                    ],
+                },
+            },
+            format="json",
+        )
+
+    def test_organizer_creates_venue_with_versioned_plan(self):
+        response = self.create_venue_with_plan()
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        venue = Venue.objects.get(pk=response.json()["id"])
+        self.assertEqual(venue.created_by, self.organizer)
+
+        plan = venue.plans.get()
+        self.assertEqual(plan.version, 1)
+        self.assertTrue(plan.is_default)
+        self.assertEqual(plan.sections.count(), 2)
+        self.assertEqual(
+            VenueSeat.objects.filter(section__venue_plan=plan).count(),
+            2,
+        )
+
+    def test_new_plan_endpoint_increments_version(self):
+        response = self.create_venue_with_plan()
+        venue_id = response.json()["id"]
+
+        next_plan = self.client.post(
+            reverse(
+                "organizer-venue-plan-list",
+                kwargs={"venue_id": venue_id},
+            ),
+            {
+                "name": "Yeni konfiqurasiya",
+                "status": VenuePlan.Status.DRAFT,
+                "sections": [],
+            },
+            format="json",
+        )
+
+        self.assertEqual(next_plan.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(next_plan.json()["version"], 2)
+
+    def test_other_organizer_cannot_open_owned_venue(self):
+        response = self.create_venue_with_plan()
+        venue_id = response.json()["id"]
+        self.client.force_authenticate(user=self.other_organizer)
+
+        hidden = self.client.get(
+            reverse("organizer-venue-detail", kwargs={"id": venue_id})
+        )
+
+        self.assertEqual(hidden.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_public_seating_plan_contains_zones_seats_and_prices(self):
+        response = self.create_venue_with_plan()
+        venue = Venue.objects.get(pk=response.json()["id"])
+        plan = venue.plans.get()
+        section = plan.sections.get(code="A")
+        start_at = timezone.now() + timedelta(days=10)
+        event = Event.objects.create(
+            organizer=self.organizer,
+            category=self.category,
+            venue=venue,
+            venue_plan=plan,
+            title="Planlı tədbir",
+            description="Zona qiymətli tədbir",
+            start_at=start_at,
+            end_at=start_at + timedelta(hours=2),
+            status=Event.Status.PUBLISHED,
+        )
+        TicketType.objects.create(
+            event=event,
+            venue_section=section,
+            name="A zona",
+            price=Decimal("45.00"),
+            capacity=2,
+        )
+
+        self.client.force_authenticate(user=None)
+        public_response = self.client.get(
+            reverse(
+                "events:event-seating-plan",
+                kwargs={"slug": event.slug},
+            )
+        )
+
+        self.assertEqual(public_response.status_code, status.HTTP_200_OK)
+        payload = public_response.json()
+        self.assertEqual(payload["plan"]["version"], 1)
+        self.assertEqual(payload["plan"]["sections"][0]["code"], "A")
+        self.assertEqual(len(payload["plan"]["sections"][0]["seats"]), 2)
+        self.assertEqual(payload["ticket_types"][0]["price"], "45.00")
+        self.assertEqual(
+            payload["ticket_types"][0]["venue_section_id"],
+            str(section.id),
         )

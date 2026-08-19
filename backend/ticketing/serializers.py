@@ -2,7 +2,7 @@ from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from events.models import Event
+from events.models import Event, VenueSection
 
 from .inventory import get_inventory_snapshot
 from .models import Order, OrderItem, Payment, Ticket, TicketType
@@ -18,18 +18,22 @@ def safe_user_display_name(user) -> str:
 
 
 class PublicTicketTypeSerializer(serializers.ModelSerializer):
+    venue_section_id = serializers.UUIDField(read_only=True)
     currency = serializers.SerializerMethodField()
     available_quantity = serializers.SerializerMethodField()
     min_quantity = serializers.SerializerMethodField()
     max_quantity = serializers.SerializerMethodField()
     sales_status = serializers.SerializerMethodField()
     is_available = serializers.SerializerMethodField()
+    venue_section = serializers.SerializerMethodField()
 
     class Meta:
         model = TicketType
         fields = [
             "id",
             "name",
+            "venue_section_id",
+            "venue_section",
             "price",
             "currency",
             "available_quantity",
@@ -94,6 +98,19 @@ class PublicTicketTypeSerializer(serializers.ModelSerializer):
             == TicketSalesStatus.AVAILABLE
         )
 
+    @staticmethod
+    def get_venue_section(ticket_type) -> dict | None:
+        section = ticket_type.venue_section
+        if section is None:
+            return None
+        return {
+            "id": str(section.id),
+            "code": section.code,
+            "name": section.name,
+            "color": section.color,
+            "seating_type": section.seating_type,
+        }
+
 
 class OrganizerTicketTypeSerializer(serializers.ModelSerializer):
     event_slug = serializers.CharField(
@@ -102,6 +119,13 @@ class OrganizerTicketTypeSerializer(serializers.ModelSerializer):
     )
     available_quantity = serializers.SerializerMethodField()
     is_available = serializers.SerializerMethodField()
+    venue_section_id = serializers.PrimaryKeyRelatedField(
+        source="venue_section",
+        queryset=VenueSection.objects.select_related("venue_plan"),
+        required=False,
+        allow_null=True,
+    )
+    venue_section = serializers.SerializerMethodField()
 
     class Meta:
         model = TicketType
@@ -109,6 +133,8 @@ class OrganizerTicketTypeSerializer(serializers.ModelSerializer):
             "id",
             "event_slug",
             "name",
+            "venue_section_id",
+            "venue_section",
             "price",
             "capacity",
             "available_quantity",
@@ -123,6 +149,7 @@ class OrganizerTicketTypeSerializer(serializers.ModelSerializer):
         read_only_fields = [
             "id",
             "event_slug",
+            "venue_section",
             "available_quantity",
             "is_available",
             "created_at",
@@ -160,6 +187,20 @@ class OrganizerTicketTypeSerializer(serializers.ModelSerializer):
             )
         )
 
+    @staticmethod
+    def get_venue_section(ticket_type) -> dict | None:
+        section = ticket_type.venue_section
+        if section is None:
+            return None
+        return {
+            "id": str(section.id),
+            "code": section.code,
+            "name": section.name,
+            "color": section.color,
+            "seating_type": section.seating_type,
+            "capacity": section.capacity,
+        }
+
     def validate(self, attrs):
         instance = self.instance
         event = (
@@ -187,6 +228,10 @@ class OrganizerTicketTypeSerializer(serializers.ModelSerializer):
         name = attrs.get(
             "name",
             getattr(instance, "name", None),
+        )
+        venue_section = attrs.get(
+            "venue_section",
+            getattr(instance, "venue_section", None),
         )
 
         errors = {}
@@ -243,6 +288,27 @@ class OrganizerTicketTypeSerializer(serializers.ModelSerializer):
             if duplicate_query.exists():
                 errors["name"] = (
                     "Bu tədbirdə eyni adlı bilet növü artıq var."
+                )
+
+        if venue_section and event:
+            if event.venue_plan_id != venue_section.venue_plan_id:
+                errors["venue_section_id"] = (
+                    "Seçilən zona tədbirin məkan planına aid deyil."
+                )
+            elif capacity is not None and capacity > venue_section.capacity:
+                errors["capacity"] = (
+                    "Bilet tutumu zona tutumundan çox ola bilməz."
+                )
+
+            duplicate_section = TicketType.objects.filter(
+                event=event,
+                venue_section=venue_section,
+            )
+            if instance:
+                duplicate_section = duplicate_section.exclude(pk=instance.pk)
+            if duplicate_section.exists():
+                errors["venue_section_id"] = (
+                    "Bu zona üçün tədbirdə artıq bilet qiyməti təyin edilib."
                 )
 
         if errors:

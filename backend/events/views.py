@@ -1,4 +1,4 @@
-from django.db.models import Prefetch
+from django.db.models import Prefetch, Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.utils import (
@@ -13,6 +13,7 @@ from rest_framework.generics import (
     ListAPIView,
     ListCreateAPIView,
     RetrieveAPIView,
+    RetrieveDestroyAPIView,
     RetrieveUpdateDestroyAPIView,
 )
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -22,13 +23,23 @@ from rest_framework.views import APIView
 from ticketing.inventory import annotate_inventory
 from ticketing.models import TicketType
 
-from .models import Event, Favorite
+from .models import (
+    Event,
+    Favorite,
+    Venue,
+    VenuePlan,
+    VenueSeat,
+    VenueSection,
+)
 from .permissions import IsOrganizer
 from .serializers import (
     EventDetailSerializer,
+    EventSeatingPlanSerializer,
     EventSerializer,
     FavoriteCreateSerializer,
     OrganizerEventSerializer,
+    OrganizerVenueSerializer,
+    VenuePlanSerializer,
 )
 
 
@@ -133,7 +144,11 @@ class EventDetailAPIView(RetrieveAPIView):
         ticket_types = annotate_inventory(
             TicketType.objects
             .filter(is_active=True)
-            .select_related("event")
+            .filter(
+                Q(venue_section__isnull=True)
+                | Q(venue_section__is_active=True)
+            )
+            .select_related("event", "venue_section")
             .order_by("price", "id"),
             now=self.get_ticket_contract_now(),
         )
@@ -150,6 +165,46 @@ class EventDetailAPIView(RetrieveAPIView):
                     "ticket_types",
                     queryset=ticket_types,
                     to_attr="public_ticket_types",
+                )
+            )
+        )
+
+
+@extend_schema_view(
+    get=extend_schema(
+        operation_id="event_seating_plan",
+        auth=[],
+        description=(
+            "Published venue plan, sections, seats and event-specific prices."
+        ),
+        responses={
+            200: EventSeatingPlanSerializer,
+            404: OpenApiResponse(description="Seating plan not found."),
+        },
+    )
+)
+class EventSeatingPlanAPIView(EventDetailAPIView):
+    serializer_class = EventSeatingPlanSerializer
+
+    def get_queryset(self):
+        return (
+            super()
+            .get_queryset()
+            .filter(venue_plan__status=VenuePlan.Status.PUBLISHED)
+            .select_related("venue_plan")
+            .prefetch_related(
+                Prefetch(
+                    "venue_plan__sections",
+                    queryset=(
+                        VenueSection.objects
+                        .filter(is_active=True)
+                        .prefetch_related(
+                            Prefetch(
+                                "seats",
+                                queryset=VenueSeat.objects.filter(is_active=True),
+                            )
+                        )
+                    ),
                 )
             )
         )
@@ -231,6 +286,116 @@ class FavoriteDetailAPIView(APIView):
             event_id=event_id,
         ).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@extend_schema_view(
+    get=extend_schema(
+        operation_id="organizer_venue_list",
+        description=(
+            "Organizer-created venues plus shared legacy venues."
+        ),
+    ),
+    post=extend_schema(
+        operation_id="organizer_venue_create",
+        description=(
+            "Create a venue, optionally with its first versioned seating plan."
+        ),
+    ),
+)
+class OrganizerVenueListCreateAPIView(ListCreateAPIView):
+    serializer_class = OrganizerVenueSerializer
+    permission_classes = [IsOrganizer]
+
+    def get_queryset(self):
+        queryset = Venue.objects.prefetch_related("plans").order_by("name")
+
+        if self.request.user.is_staff:
+            return queryset
+
+        return queryset.filter(
+            Q(created_by=self.request.user) | Q(created_by__isnull=True)
+        )
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+
+class OrganizerVenueDetailAPIView(RetrieveUpdateDestroyAPIView):
+    serializer_class = OrganizerVenueSerializer
+    permission_classes = [IsOrganizer]
+    lookup_field = "id"
+
+    def get_queryset(self):
+        queryset = Venue.objects.prefetch_related("plans")
+
+        if self.request.user.is_staff:
+            return queryset
+
+        return queryset.filter(created_by=self.request.user)
+
+    def destroy(self, request, *args, **kwargs):
+        venue = self.get_object()
+        if venue.events.exists():
+            return Response(
+                {
+                    "detail": (
+                        "Bu məkan tədbirlərdə istifadə olunduğu üçün silinə bilməz."
+                    )
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        return super().destroy(request, *args, **kwargs)
+
+
+class OrganizerVenuePlanListCreateAPIView(ListCreateAPIView):
+    serializer_class = VenuePlanSerializer
+    permission_classes = [IsOrganizer]
+
+    def get_venue(self):
+        queryset = Venue.objects.all()
+        if not self.request.user.is_staff:
+            queryset = queryset.filter(created_by=self.request.user)
+        return get_object_or_404(queryset, id=self.kwargs["venue_id"])
+
+    def get_queryset(self):
+        return (
+            self.get_venue()
+            .plans
+            .prefetch_related("sections__seats")
+            .order_by("-version")
+        )
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["venue"] = self.get_venue()
+        return context
+
+
+class OrganizerVenuePlanDetailAPIView(RetrieveDestroyAPIView):
+    serializer_class = VenuePlanSerializer
+    permission_classes = [IsOrganizer]
+
+    def get_queryset(self):
+        queryset = VenuePlan.objects.prefetch_related("sections__seats").filter(
+            venue_id=self.kwargs["venue_id"]
+        )
+        if self.request.user.is_staff:
+            return queryset
+        return queryset.filter(venue__created_by=self.request.user)
+
+    def destroy(self, request, *args, **kwargs):
+        plan = self.get_object()
+        if plan.events.exists():
+            return Response(
+                {
+                    "detail": (
+                        "Bu plan tədbirdə istifadə olunduğu üçün silinə bilməz. "
+                        "Yeni versiya yaradın."
+                    )
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        return super().destroy(request, *args, **kwargs)
 
 
 @extend_schema_view(

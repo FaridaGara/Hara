@@ -22,7 +22,13 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
-from events.models import Category, Event, Venue
+from events.models import (
+    Category,
+    Event,
+    Venue,
+    VenuePlan,
+    VenueSection,
+)
 
 from .checkins.services import check_in_ticket
 from .inventory import get_inventory_snapshot
@@ -3707,3 +3713,128 @@ class InventoryConcurrencyTests(TransactionTestCase):
         self.assertEqual(sum(results), 1)
         order.refresh_from_db()
         self.assertEqual(order.status, Order.Status.EXPIRED)
+
+
+class VenueSectionTicketTypeAPITests(APITestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.organizer = User.objects.create_user(
+            email="section-price-organizer@hara.today",
+            password="StrongPass123!",
+            account_type="organizer",
+        )
+        cls.category = Category.objects.create(
+            name="Section price music",
+            slug="section-price-music",
+        )
+        cls.venue = Venue.objects.create(
+            name="Section Price Hall",
+            city="Bakı",
+            address="Neftçilər prospekti 1",
+            location=Point(49.84, 40.37, srid=4326),
+            created_by=cls.organizer,
+        )
+        cls.plan = VenuePlan.objects.create(
+            venue=cls.venue,
+            name="Main hall",
+            version=1,
+            status=VenuePlan.Status.PUBLISHED,
+            is_default=True,
+        )
+        cls.section = VenueSection.objects.create(
+            venue_plan=cls.plan,
+            code="VIP",
+            name="VIP zona",
+            seating_type=VenueSection.SeatingType.GENERAL_ADMISSION,
+            color="#5B5CE2",
+            capacity=20,
+        )
+        start_at = timezone.now() + timedelta(days=10)
+        cls.event = Event.objects.create(
+            organizer=cls.organizer,
+            category=cls.category,
+            venue=cls.venue,
+            venue_plan=cls.plan,
+            title="Zone price event",
+            description="Section price test",
+            start_at=start_at,
+            end_at=start_at + timedelta(hours=2),
+            status=Event.Status.PUBLISHED,
+        )
+
+    def setUp(self):
+        self.client.force_authenticate(user=self.organizer)
+
+    def test_organizer_assigns_event_price_to_venue_section(self):
+        response = self.client.post(
+            reverse(
+                "organizer-ticket-type-list",
+                kwargs={"event_slug": self.event.slug},
+            ),
+            {
+                "name": "VIP",
+                "venue_section_id": str(self.section.id),
+                "price": "45.00",
+                "capacity": 20,
+                "max_per_order": 4,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(
+            response.json()["venue_section_id"],
+            str(self.section.id),
+        )
+        self.assertEqual(response.json()["venue_section"]["code"], "VIP")
+
+    def test_ticket_capacity_cannot_exceed_section_capacity(self):
+        response = self.client.post(
+            reverse(
+                "organizer-ticket-type-list",
+                kwargs={"event_slug": self.event.slug},
+            ),
+            {
+                "name": "VIP",
+                "venue_section_id": str(self.section.id),
+                "price": "45.00",
+                "capacity": 21,
+                "max_per_order": 4,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("capacity", response.json())
+
+    def test_section_from_another_plan_is_rejected(self):
+        other_plan = VenuePlan.objects.create(
+            venue=self.venue,
+            name="Alternative hall",
+            version=2,
+            status=VenuePlan.Status.PUBLISHED,
+        )
+        other_section = VenueSection.objects.create(
+            venue_plan=other_plan,
+            code="ALT",
+            name="Alternative zona",
+            capacity=10,
+        )
+
+        response = self.client.post(
+            reverse(
+                "organizer-ticket-type-list",
+                kwargs={"event_slug": self.event.slug},
+            ),
+            {
+                "name": "Alternative",
+                "venue_section_id": str(other_section.id),
+                "price": "20.00",
+                "capacity": 10,
+                "max_per_order": 2,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("venue_section_id", response.json())

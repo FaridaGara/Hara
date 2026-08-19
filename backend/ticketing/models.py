@@ -1,6 +1,7 @@
 import uuid
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
 
@@ -12,6 +13,13 @@ class TicketType(models.Model):
         related_name="ticket_types",
     )
     name = models.CharField(max_length=120)
+    venue_section = models.ForeignKey(
+        "events.VenueSection",
+        on_delete=models.PROTECT,
+        related_name="ticket_types",
+        null=True,
+        blank=True,
+    )
     price = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -27,6 +35,29 @@ class TicketType(models.Model):
 
     class Meta:
         ordering = ["price", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("event", "venue_section"),
+                condition=models.Q(venue_section__isnull=False),
+                name="unique_ticket_type_per_event_section",
+            ),
+        ]
+
+    def clean(self):
+        if not self.venue_section_id:
+            return
+
+        if self.event.venue_plan_id != self.venue_section.venue_plan_id:
+            raise ValidationError({
+                "venue_section": (
+                    "Seçilən zona tədbirin məkan planına aid deyil."
+                )
+            })
+
+        if self.capacity > self.venue_section.capacity:
+            raise ValidationError({
+                "capacity": "Bilet tutumu zona tutumundan çox ola bilməz."
+            })
 
     def __str__(self):
         return f"{self.event.title} — {self.name}"

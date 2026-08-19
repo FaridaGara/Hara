@@ -1,7 +1,7 @@
 # HARA API Endpoint Inventory
 
 This inventory reflects the URL patterns connected to `config.urls` on
-2026-08-19. There are 22 routes and 33 HTTP operations. Responses are JSON
+2026-08-19. There are 28 routes and 46 HTTP operations. Responses are JSON
 unless noted otherwise. Datetimes use ISO 8601 and money values are serialized
 as decimal strings. No DRF pagination is configured.
 
@@ -32,7 +32,8 @@ Access notation:
 ## Public events
 
 Public event detail includes active ticket types in `ticket_types`. Each entry
-contains `id`, `name`, decimal-string `price`, `currency` (`AZN`),
+contains `id`, `name`, nullable `venue_section_id`, a nullable
+`venue_section` summary, decimal-string `price`, `currency` (`AZN`),
 `available_quantity`, the nullable sales window, `min_quantity`,
 `max_quantity`, `sales_status`, and `is_available`. `sales_status` is one of
 `UPCOMING`, `AVAILABLE`, `SOLD_OUT`, or `ENDED`; availability uses the same
@@ -42,6 +43,7 @@ paid-sale and unexpired-reservation inventory calculation as checkout.
 |---|---|---|---|---|---|---|---|
 | GET | `/api/events/` | `events:event-list` | Public | Query: `category` slug, `city`, `featured=true\|false`, `search`, `ordering=start_at\|created_at` | 200 event array | Invalid `featured` is currently ignored | Published event discovery |
 | GET | `/api/events/<slug>/` | `events:event-detail` | Public | Slug path parameter | 200 event with attendee `ticket_types` | 404 missing, draft, inactive category or inactive venue | Published event and purchasable inventory detail |
+| GET | `/api/events/<slug>/seating-plan/` | `events:event-seating-plan` | Public | Slug path parameter | 200 venue plan, active sections/seats and event prices | 404 missing, draft, inactive or no published plan | Interactive event plan contract |
 
 ## User favorites
 
@@ -55,12 +57,34 @@ missing favorite is also idempotent.
 | POST | `/api/favorites/` | `favorite-list` | JWT | Body: `event_id` UUID | 201 added event; 200 existing favorite | 400 malformed UUID; 401; 404 unpublished/inactive/missing event | Add an event to favorites |
 | DELETE | `/api/favorites/<event_id>/` | `favorite-detail` | JWT; Owned | Event UUID | 204, including repeated removal | 401 | Remove an event from favorites |
 
+## Organizer venues and plans
+
+A venue owns reusable, versioned plans. Each plan can contain general-admission
+or reserved-seating sections, optional geometry, colors, capacity, and
+individual seat coordinates. A plan referenced by an event cannot be deleted;
+create a new version instead. Event-specific prices remain in ticket types and
+may point to one section, so the same physical plan can have different prices
+for different events.
+
+| Method | Path | URL name | Access | Request / query | Success | Main errors | Purpose |
+|---|---|---|---|---|---|---|---|
+| GET | `/api/organizer/venues/` | `organizer-venue-list` | Organizer; own plus shared legacy venues, staff sees all | None | 200 venue array with plan summaries | 401; 403 | List usable venues |
+| POST | `/api/organizer/venues/` | `organizer-venue-list` | Organizer | Venue fields plus `latitude`, `longitude`; optional nested `plan` with `sections` and `seats` | 201 venue | 400 validation; 401; 403 | Create a venue and optional first plan atomically |
+| GET | `/api/organizer/venues/<venue_id>/` | `organizer-venue-detail` | Organizer; Owned, staff bypass | Venue UUID | 200 venue | 401; 403; 404 | Venue detail |
+| PUT | `/api/organizer/venues/<venue_id>/` | `organizer-venue-detail` | Organizer; Owned, staff bypass | Full venue body | 200 venue | 400; 401; 403; 404 | Replace venue metadata |
+| PATCH | `/api/organizer/venues/<venue_id>/` | `organizer-venue-detail` | Organizer; Owned, staff bypass | Partial venue body | 200 venue | 400; 401; 403; 404 | Update venue metadata |
+| DELETE | `/api/organizer/venues/<venue_id>/` | `organizer-venue-detail` | Organizer; Owned, staff bypass | None | 204 | 401; 403; 404; 409 venue is used by an event | Delete an unused venue |
+| GET | `/api/organizer/venues/<venue_id>/plans/` | `organizer-venue-plan-list` | Organizer; Owned, staff bypass | Venue UUID | 200 full plan array | 401; 403; 404 | List versioned plans |
+| POST | `/api/organizer/venues/<venue_id>/plans/` | `organizer-venue-plan-list` | Organizer; Owned, staff bypass | Plan with optional background URL and nested sections/seats | 201 plan with next version | 400; 401; 403; 404 | Create the next immutable plan version |
+| GET | `/api/organizer/venues/<venue_id>/plans/<plan_id>/` | `organizer-venue-plan-detail` | Organizer; Owned, staff bypass | Venue and plan UUIDs | 200 full plan | 401; 403; 404 | Plan detail |
+| DELETE | `/api/organizer/venues/<venue_id>/plans/<plan_id>/` | `organizer-venue-plan-detail` | Organizer; Owned, staff bypass | None | 204 | 401; 403; 404; 409 plan is used by an event | Delete an unused plan version |
+
 ## Organizer events
 
 | Method | Path | URL name | Access | Request / query | Success | Main errors | Purpose |
 |---|---|---|---|---|---|---|---|
 | GET | `/api/organizer/events/` | `organizer-event-list` | Organizer; own events, staff sees all | None | 200 event array | 401 unauthenticated; 403 non-organizer | Organizer event list |
-| POST | `/api/organizer/events/` | `organizer-event-list` | Organizer | Body: `title`, `description`, `category_id`, `venue_id`, `start_at`, `end_at`, `status`; optional `cover_image_url` | 201 event | 400 validation; 401; 403 | Create organizer-owned event |
+| POST | `/api/organizer/events/` | `organizer-event-list` | Organizer | Body: `title`, `description`, `category_id`, `venue_id`, `start_at`, `end_at`, `status`; optional `cover_image_url`, `venue_plan_id` | 201 event | 400 validation; 401; 403 | Create organizer-owned event |
 | GET | `/api/organizer/events/<slug>/` | `organizer-event-detail` | Organizer; Owned, staff bypass | Slug path parameter | 200 event | 401; 403; 404 ownership/not found | Organizer event detail |
 | PUT | `/api/organizer/events/<slug>/` | `organizer-event-detail` | Organizer; Owned, staff bypass | Full organizer event body | 200 event | 400 validation; 401; 403; 404; 409 ticketed event lock | Replace event |
 | PATCH | `/api/organizer/events/<slug>/` | `organizer-event-detail` | Organizer; Owned, staff bypass | Partial organizer event body | 200 event | 400; 401; 403; 404; 409 ticketed event lock | Update event |
@@ -68,13 +92,15 @@ missing favorite is also idempotent.
 
 ## Organizer ticket types
 
-Ticket type reads include `capacity`, current read-only `available_quantity`,
-`sales_start_at`, `sales_end_at`, and read-only `is_available`.
+Ticket type reads include `capacity`, optional `venue_section_id` and section
+summary, current read-only `available_quantity`, `sales_start_at`,
+`sales_end_at`, and read-only `is_available`. A section can have one price per
+event, and ticket capacity cannot exceed section capacity.
 
 | Method | Path | URL name | Access | Request / query | Success | Main errors | Purpose |
 |---|---|---|---|---|---|---|---|
 | GET | `/api/organizer/events/<event_slug>/ticket-types/` | `organizer-ticket-type-list` | Organizer; event owner, staff bypass | Event slug | 200 ticket type array | 401; 403; 404 ownership/not found | Ticket type inventory |
-| POST | `/api/organizer/events/<event_slug>/ticket-types/` | `organizer-ticket-type-list` | Organizer; event owner, staff bypass | Body: `name`, `price`, `capacity`, `max_per_order`; optional sales window and `is_active` | 201 ticket type | 400 validation; 401; 403; 404 | Create ticket type |
+| POST | `/api/organizer/events/<event_slug>/ticket-types/` | `organizer-ticket-type-list` | Organizer; event owner, staff bypass | Body: `name`, `price`, `capacity`, `max_per_order`; optional `venue_section_id`, sales window and `is_active` | 201 ticket type | 400 validation; 401; 403; 404 | Create ticket type or section price |
 | GET | `/api/organizer/events/<event_slug>/ticket-types/<id>/` | `organizer-ticket-type-detail` | Organizer; Owned, staff bypass | Slug and integer ID | 200 ticket type | 401; 403; 404 | Ticket type detail |
 | PUT | `/api/organizer/events/<event_slug>/ticket-types/<id>/` | `organizer-ticket-type-detail` | Organizer; Owned, staff bypass | Full ticket type body | 200 ticket type | 400; 401; 403; 404; 409 lifecycle/capacity floor | Replace ticket type |
 | PATCH | `/api/organizer/events/<event_slug>/ticket-types/<id>/` | `organizer-ticket-type-detail` | Organizer; Owned, staff bypass | Partial ticket type body | 200 ticket type | 400; 401; 403; 404; 409 lifecycle/capacity floor | Update ticket type |
@@ -154,7 +180,7 @@ Duplicate scans return the original timestamp:
 
 ## Not exposed by the current URL configuration
 
-There are currently no connected API routes for registration, user profile,
-organizer profile/verification, standalone venue CRUD, a dedicated event
-publish action, refunds, settlements, or Chewick. They are intentionally not
-represented as endpoints in this inventory.
+There are currently no connected API routes for registration, organizer
+profile/verification, a dedicated event publish action, seat reservation,
+refunds, settlements, or Chewick. They are intentionally not represented as
+endpoints in this inventory.

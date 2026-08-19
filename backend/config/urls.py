@@ -35,6 +35,10 @@ from events.views import (
     FavoriteListCreateAPIView,
     OrganizerEventDetailAPIView,
     OrganizerEventListCreateAPIView,
+    OrganizerVenueDetailAPIView,
+    OrganizerVenueListCreateAPIView,
+    OrganizerVenuePlanDetailAPIView,
+    OrganizerVenuePlanListCreateAPIView,
 )
 from ticketing.views import (
     OrderCancelAPIView,
@@ -115,6 +119,26 @@ urlpatterns = [
         "api/organizer/events/<slug:slug>/",
         OrganizerEventDetailAPIView.as_view(),
         name="organizer-event-detail",
+    ),
+    path(
+        "api/organizer/venues/",
+        OrganizerVenueListCreateAPIView.as_view(),
+        name="organizer-venue-list",
+    ),
+    path(
+        "api/organizer/venues/<uuid:id>/",
+        OrganizerVenueDetailAPIView.as_view(),
+        name="organizer-venue-detail",
+    ),
+    path(
+        "api/organizer/venues/<uuid:venue_id>/plans/",
+        OrganizerVenuePlanListCreateAPIView.as_view(),
+        name="organizer-venue-plan-list",
+    ),
+    path(
+        "api/organizer/venues/<uuid:venue_id>/plans/<uuid:pk>/",
+        OrganizerVenuePlanDetailAPIView.as_view(),
+        name="organizer-venue-plan-detail",
     ),
     path(
         "api/organizer/events/<slug:event_slug>/ticket-types/",

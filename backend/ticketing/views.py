@@ -222,7 +222,7 @@ class OrganizerTicketTypeListCreateAPIView(
         queryset = (
             self.get_event()
             .ticket_types
-            .select_related("event")
+            .select_related("event", "venue_section")
             .order_by("price", "id")
         )
         return annotate_inventory(queryset)

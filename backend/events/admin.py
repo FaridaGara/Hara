@@ -1,7 +1,15 @@
 from django.contrib import admin
 from django.contrib.gis.admin import GISModelAdmin
 
-from .models import Category, Event, Favorite, Venue
+from .models import (
+    Category,
+    Event,
+    Favorite,
+    Venue,
+    VenuePlan,
+    VenueSeat,
+    VenueSection,
+)
 
 
 @admin.register(Category)
@@ -14,7 +22,13 @@ class CategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Venue)
 class VenueAdmin(GISModelAdmin):
-    list_display = ("name", "city", "address", "is_active")
+    list_display = (
+        "name",
+        "city",
+        "address",
+        "created_by",
+        "is_active",
+    )
     list_filter = ("city", "is_active")
     search_fields = ("name", "city", "address")
 
@@ -27,12 +41,62 @@ class VenueAdmin(GISModelAdmin):
     }
 
 
+@admin.register(VenuePlan)
+class VenuePlanAdmin(admin.ModelAdmin):
+    list_display = (
+        "name",
+        "venue",
+        "version",
+        "status",
+        "is_default",
+    )
+    list_filter = ("status", "is_default")
+    search_fields = ("name", "venue__name")
+    autocomplete_fields = ("venue",)
+    readonly_fields = ("version", "created_at", "updated_at")
+
+
+@admin.register(VenueSection)
+class VenueSectionAdmin(admin.ModelAdmin):
+    list_display = (
+        "name",
+        "code",
+        "venue_plan",
+        "seating_type",
+        "capacity",
+        "is_active",
+    )
+    list_filter = ("seating_type", "is_active")
+    search_fields = ("name", "code", "venue_plan__venue__name")
+    autocomplete_fields = ("venue_plan",)
+
+
+@admin.register(VenueSeat)
+class VenueSeatAdmin(admin.ModelAdmin):
+    list_display = (
+        "section",
+        "row_label",
+        "seat_number",
+        "is_accessible",
+        "is_active",
+    )
+    list_filter = ("is_accessible", "is_active")
+    search_fields = (
+        "section__name",
+        "section__venue_plan__venue__name",
+        "row_label",
+        "seat_number",
+    )
+    autocomplete_fields = ("section",)
+
+
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
     list_display = (
         "title",
         "category",
         "venue",
+        "venue_plan",
         "start_at",
         "status",
         "is_featured",
@@ -44,7 +108,12 @@ class EventAdmin(admin.ModelAdmin):
         "organizer__email",
         "venue__name",
     )
-    autocomplete_fields = ("organizer", "category", "venue")
+    autocomplete_fields = (
+        "organizer",
+        "category",
+        "venue",
+        "venue_plan",
+    )
     readonly_fields = ("slug", "created_at", "updated_at")
     date_hierarchy = "start_at"
 

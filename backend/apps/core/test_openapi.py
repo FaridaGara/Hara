@@ -129,6 +129,8 @@ class OpenAPIContractTests(APISimpleTestCase):
             {
                 "id",
                 "name",
+                "venue_section_id",
+                "venue_section",
                 "price",
                 "currency",
                 "available_quantity",

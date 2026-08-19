@@ -3,6 +3,7 @@ import uuid
 from django.conf import settings
 from django.contrib.gis.db import models
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator, RegexValidator
 from django.utils.text import slugify
 
 
@@ -28,6 +29,13 @@ class Venue(models.Model):
         srid=4326,
         geography=True,
     )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="created_venues",
+        null=True,
+        blank=True,
+    )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -37,6 +45,155 @@ class Venue(models.Model):
 
     def __str__(self):
         return f"{self.name} — {self.city}"
+
+
+class VenuePlan(models.Model):
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        PUBLISHED = "published", "Published"
+        ARCHIVED = "archived", "Archived"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    venue = models.ForeignKey(
+        Venue,
+        on_delete=models.CASCADE,
+        related_name="plans",
+    )
+    name = models.CharField(max_length=160)
+    version = models.PositiveSmallIntegerField()
+    background_image_url = models.URLField(blank=True)
+    canvas_width = models.PositiveIntegerField(
+        default=1200,
+        validators=[MinValueValidator(1)],
+    )
+    canvas_height = models.PositiveIntegerField(
+        default=900,
+        validators=[MinValueValidator(1)],
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.DRAFT,
+    )
+    is_default = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["venue", "-version"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("venue", "version"),
+                name="unique_venue_plan_version",
+            ),
+            models.UniqueConstraint(
+                fields=("venue",),
+                condition=models.Q(is_default=True),
+                name="unique_default_plan_per_venue",
+            ),
+        ]
+
+    def clean(self):
+        if self.is_default and self.status != self.Status.PUBLISHED:
+            raise ValidationError({
+                "is_default": "Yalnız yayımlanmış plan əsas plan ola bilər."
+            })
+
+    def __str__(self):
+        return f"{self.venue.name} — {self.name} v{self.version}"
+
+
+class VenueSection(models.Model):
+    class SeatingType(models.TextChoices):
+        GENERAL_ADMISSION = "general_admission", "General admission"
+        RESERVED_SEATING = "reserved_seating", "Reserved seating"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    venue_plan = models.ForeignKey(
+        VenuePlan,
+        on_delete=models.CASCADE,
+        related_name="sections",
+    )
+    code = models.CharField(max_length=40)
+    name = models.CharField(max_length=120)
+    seating_type = models.CharField(
+        max_length=24,
+        choices=SeatingType.choices,
+        default=SeatingType.GENERAL_ADMISSION,
+    )
+    color = models.CharField(
+        max_length=7,
+        default="#5B5CE2",
+        validators=[
+            RegexValidator(
+                regex=r"^#[0-9A-Fa-f]{6}$",
+                message="Rəng #RRGGBB formatında olmalıdır.",
+            )
+        ],
+    )
+    capacity = models.PositiveIntegerField(
+        validators=[MinValueValidator(1)],
+    )
+    geometry = models.JSONField(default=dict, blank=True)
+    sort_order = models.PositiveSmallIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["sort_order", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("venue_plan", "code"),
+                name="unique_section_code_per_venue_plan",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.venue_plan} — {self.name}"
+
+
+class VenueSeat(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    section = models.ForeignKey(
+        VenueSection,
+        on_delete=models.CASCADE,
+        related_name="seats",
+    )
+    row_label = models.CharField(max_length=30)
+    seat_number = models.CharField(max_length=30)
+    x = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        validators=[MinValueValidator(0)],
+    )
+    y = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        validators=[MinValueValidator(0)],
+    )
+    is_accessible = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["row_label", "seat_number"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("section", "row_label", "seat_number"),
+                name="unique_seat_per_section_row",
+            ),
+        ]
+
+    def clean(self):
+        if (
+            self.section_id
+            and self.section.seating_type
+            != VenueSection.SeatingType.RESERVED_SEATING
+        ):
+            raise ValidationError({
+                "section": "Oturacaq yalnız nömrəli oturacaq zonasına əlavə edilə bilər."
+            })
+
+    def __str__(self):
+        return f"{self.section} — {self.row_label}/{self.seat_number}"
 
 
 class Event(models.Model):
@@ -62,6 +219,13 @@ class Event(models.Model):
         Venue,
         on_delete=models.PROTECT,
         related_name="events",
+    )
+    venue_plan = models.ForeignKey(
+        VenuePlan,
+        on_delete=models.PROTECT,
+        related_name="events",
+        null=True,
+        blank=True,
     )
 
     title = models.CharField(max_length=255)
@@ -100,6 +264,24 @@ class Event(models.Model):
         if self.start_at and self.end_at and self.end_at <= self.start_at:
             raise ValidationError({
                 "end_at": "Bitmə vaxtı başlama vaxtından sonra olmalıdır."
+            })
+
+        if (
+            self.venue_plan_id
+            and self.venue_id
+            and self.venue_plan.venue_id != self.venue_id
+        ):
+            raise ValidationError({
+                "venue_plan": "Seçilən plan tədbirin məkanına aid deyil."
+            })
+
+        if (
+            self.status == self.Status.PUBLISHED
+            and self.venue_plan_id
+            and self.venue_plan.status != VenuePlan.Status.PUBLISHED
+        ):
+            raise ValidationError({
+                "venue_plan": "Yayımlanmış tədbir yalnız yayımlanmış plan istifadə edə bilər."
             })
 
     def save(self, *args, **kwargs):
