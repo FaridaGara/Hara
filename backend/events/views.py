@@ -1,4 +1,5 @@
 from django.db.models import Prefetch
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.utils import (
     OpenApiParameter,
@@ -14,17 +15,19 @@ from rest_framework.generics import (
     RetrieveAPIView,
     RetrieveUpdateDestroyAPIView,
 )
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from ticketing.inventory import annotate_inventory
 from ticketing.models import TicketType
 
-from .models import Event
+from .models import Event, Favorite
 from .permissions import IsOrganizer
 from .serializers import (
     EventDetailSerializer,
     EventSerializer,
+    FavoriteCreateSerializer,
     OrganizerEventSerializer,
 )
 
@@ -150,6 +153,84 @@ class EventDetailAPIView(RetrieveAPIView):
                 )
             )
         )
+
+
+class FavoriteListCreateAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        operation_id="favorite_list",
+        description="Events favorited by the authenticated user.",
+        responses={200: EventSerializer(many=True)},
+    )
+    def get(self, request):
+        events = (
+            Event.objects
+            .filter(
+                favorite_records__user=request.user,
+                status=Event.Status.PUBLISHED,
+                category__is_active=True,
+                venue__is_active=True,
+            )
+            .select_related("category", "venue", "organizer")
+            .order_by("-favorite_records__created_at")
+        )
+        return Response(
+            EventSerializer(
+                events,
+                many=True,
+                context={"request": request},
+            ).data
+        )
+
+    @extend_schema(
+        operation_id="favorite_create",
+        description="Add a published event to the authenticated user's favorites.",
+        request=FavoriteCreateSerializer,
+        responses={
+            200: EventSerializer,
+            201: EventSerializer,
+            404: OpenApiResponse(description="Published event not found."),
+        },
+    )
+    def post(self, request):
+        serializer = FavoriteCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        event = get_object_or_404(
+            Event.objects.select_related("category", "venue", "organizer"),
+            id=serializer.validated_data["event_id"],
+            status=Event.Status.PUBLISHED,
+            category__is_active=True,
+            venue__is_active=True,
+        )
+        _, created = Favorite.objects.get_or_create(
+            user=request.user,
+            event=event,
+        )
+        return Response(
+            EventSerializer(event, context={"request": request}).data,
+            status=(
+                status.HTTP_201_CREATED
+                if created
+                else status.HTTP_200_OK
+            ),
+        )
+
+
+class FavoriteDetailAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        operation_id="favorite_delete",
+        description="Remove an event from the authenticated user's favorites.",
+        responses={204: None},
+    )
+    def delete(self, request, event_id):
+        Favorite.objects.filter(
+            user=request.user,
+            event_id=event_id,
+        ).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @extend_schema_view(

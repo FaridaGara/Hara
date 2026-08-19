@@ -1,7 +1,7 @@
 # HARA API Endpoint Inventory
 
 This inventory reflects the URL patterns connected to `config.urls` on
-2026-07-27. There are 20 routes and 30 HTTP operations. Responses are JSON
+2026-08-19. There are 22 routes and 33 HTTP operations. Responses are JSON
 unless noted otherwise. Datetimes use ISO 8601 and money values are serialized
 as decimal strings. No DRF pagination is configured.
 
@@ -42,6 +42,18 @@ paid-sale and unexpired-reservation inventory calculation as checkout.
 |---|---|---|---|---|---|---|---|
 | GET | `/api/events/` | `events:event-list` | Public | Query: `category` slug, `city`, `featured=true\|false`, `search`, `ordering=start_at\|created_at` | 200 event array | Invalid `featured` is currently ignored | Published event discovery |
 | GET | `/api/events/<slug>/` | `events:event-detail` | Public | Slug path parameter | 200 event with attendee `ticket_types` | 404 missing, draft, inactive category or inactive venue | Published event and purchasable inventory detail |
+
+## User favorites
+
+Favorites are account-scoped and only accept published events whose category
+and venue are active. Adding the same event twice is idempotent. Removing a
+missing favorite is also idempotent.
+
+| Method | Path | URL name | Access | Request / query | Success | Main errors | Purpose |
+|---|---|---|---|---|---|---|---|
+| GET | `/api/favorites/` | `favorite-list` | JWT; Owned | None | 200 event array ordered by newest favorite | 401 | List the authenticated user's favorites |
+| POST | `/api/favorites/` | `favorite-list` | JWT | Body: `event_id` UUID | 201 added event; 200 existing favorite | 400 malformed UUID; 401; 404 unpublished/inactive/missing event | Add an event to favorites |
+| DELETE | `/api/favorites/<event_id>/` | `favorite-detail` | JWT; Owned | Event UUID | 204, including repeated removal | 401 | Remove an event from favorites |
 
 ## Organizer events
 

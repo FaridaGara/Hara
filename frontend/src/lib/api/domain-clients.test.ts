@@ -4,6 +4,7 @@ import { setSession } from "@/lib/auth/session";
 import { orderFixture } from "@/test/fixtures";
 
 import { ordersApi } from "./orders";
+import { favoritesApi } from "./favorites";
 import { paymentsApi } from "./payments";
 import { ticketsApi } from "./tickets";
 
@@ -15,6 +16,32 @@ function jsonResponse(payload: unknown) {
 }
 
 describe("domain request contracts", () => {
+  it("favorite list, add və remove contract-ları JWT ilə düzgündür", async () => {
+    setSession({ access: "access", refresh: "refresh" });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValueOnce(jsonResponse({ id: "event-id" }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await favoritesApi.list();
+    await favoritesApi.add("event-id");
+    await favoritesApi.remove("event-id");
+
+    const [listUrl, listInit] = fetchMock.mock.calls[0];
+    const [addUrl, addInit] = fetchMock.mock.calls[1];
+    const [removeUrl, removeInit] = fetchMock.mock.calls[2];
+
+    expect(listUrl).toContain("/api/favorites/");
+    expect(new Headers(listInit?.headers).get("Authorization")).toBe("Bearer access");
+    expect(addUrl).toContain("/api/favorites/");
+    expect(addInit?.method).toBe("POST");
+    expect(JSON.parse(addInit?.body as string)).toEqual({ event_id: "event-id" });
+    expect(removeUrl).toContain("/api/favorites/event-id/");
+    expect(removeInit?.method).toBe("DELETE");
+  });
+
   it("order create contract və Idempotency-Key düzgündür", async () => {
     setSession({ access: "access", refresh: "refresh" });
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(orderFixture()));

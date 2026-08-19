@@ -19,6 +19,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     pathname === "/" ||
     pathname === "/map" ||
     pathname === "/tickets" ||
+    pathname === "/favorites" ||
     pathname === "/more";
 
   const handleLogout = () => {

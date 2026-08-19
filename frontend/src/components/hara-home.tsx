@@ -12,6 +12,8 @@ import {
 } from "@/lib/api";
 import { formatBakuDate, safePosterUrl } from "@/lib/format";
 
+import { useAuth } from "./auth-provider";
+import { useFavorites } from "./favorites-provider";
 import { MobileTabBar } from "./mobile-tab-bar";
 
 type LoadEvents = (
@@ -79,24 +81,47 @@ function AdaptiveIcon({
   );
 }
 
-function FavoriteButton({ light = false, compact = false }: { light?: boolean; compact?: boolean }) {
-  const [selected, setSelected] = useState(false);
+function FavoriteButton({
+  event,
+  light = false,
+  compact = false,
+}: {
+  event: HaraEvent;
+  light?: boolean;
+  compact?: boolean;
+}) {
+  const { isFavorite, toggleFavorite } = useFavorites();
+  const selected = isFavorite(event.id);
 
   return (
     <button
       type="button"
       aria-label={selected ? "Sevimlilərdən çıxar" : "Sevimlilərə əlavə et"}
       aria-pressed={selected}
-      onClick={() => setSelected((value) => !value)}
+      onClick={(clickEvent) => {
+        clickEvent.preventDefault();
+        clickEvent.stopPropagation();
+        void toggleFavorite(event);
+      }}
       className={`relative z-10 grid shrink-0 place-items-center rounded-full transition active:scale-95 ${
-        light
+        selected
+          ? light
+            ? "size-8 bg-white/18"
+            : compact
+              ? "size-8 bg-transparent"
+              : "size-10 bg-[var(--hara-surface)]"
+          : light
           ? "size-8 bg-white/12"
           : compact
             ? "size-8 bg-transparent"
             : "size-10 bg-[var(--hara-surface)]"
       }`}
     >
-      {light ? (
+      {selected ? (
+        <span className={`${compact || light ? "text-[19px]" : "text-[27px]"} leading-none text-[#ff2c3d]`} aria-hidden="true">
+          ♥
+        </span>
+      ) : light ? (
         <Image src="/figma/home/heart-light.svg" alt="" width={16} height={16} />
       ) : (
         <AdaptiveIcon
@@ -110,6 +135,11 @@ function FavoriteButton({ light = false, compact = false }: { light?: boolean; c
 }
 
 export function Header() {
+  const { status, user } = useAuth();
+  const { favorites } = useFavorites();
+  const profileName = user?.first_name?.trim() || user?.display_name?.trim().split(/\s+/)[0];
+  const greeting = status === "authenticated" && profileName ? `Salam, ${profileName} 👋` : "Salam!";
+
   return (
     <header className="hara-home-header flex items-center gap-3 px-4 pb-4">
       <div className="flex min-w-0 flex-1 items-center gap-3.5">
@@ -123,7 +153,7 @@ export function Header() {
         />
         <div className="min-w-0 flex-1">
           <p className="truncate text-[16px] leading-[21px] font-semibold tracking-[-0.31px] text-[var(--hara-primary)]">
-            Salam, Monika 👋
+            {greeting}
           </p>
           <p className="truncate text-[13px] leading-[18px] tracking-[-0.08px] text-[var(--hara-muted)]">
             Bu gün nə etmək istəyirsən?
@@ -131,7 +161,22 @@ export function Header() {
         </div>
       </div>
       <div className="flex shrink-0 gap-2">
-        <FavoriteButton />
+        <Link
+          href="/favorites"
+          aria-label="Sevimlilər"
+          className="relative grid size-10 shrink-0 place-items-center rounded-full bg-[var(--hara-surface)] transition active:scale-95"
+        >
+          <AdaptiveIcon
+            lightSrc="/figma/home/heart-dark.svg"
+            darkSrc="/figma/home-dark/header-heart.svg"
+            size={24}
+          />
+          {favorites.length ? (
+            <span className="absolute -top-1 -right-0.5 grid size-5 place-items-center rounded-full border border-[var(--hara-badge-border)] bg-[#ff2c3d] text-[9px] leading-3 font-medium text-white">
+              {favorites.length > 9 ? "9+" : favorites.length}
+            </span>
+          ) : null}
+        </Link>
         <button
           type="button"
           className="relative grid size-10 place-items-center rounded-full bg-[var(--hara-surface)] transition active:scale-95"
@@ -204,7 +249,7 @@ export function FeaturedEventCard({
         <span className="rounded-lg bg-[#565dd8]/20 px-2 py-1 text-xs leading-4 text-white">
           {event.category.name}
         </span>
-        <FavoriteButton light />
+        <FavoriteButton event={event} light />
       </div>
       <div className="absolute right-3 bottom-3 left-3">
         <h2 className="line-clamp-2 text-[20px] leading-[25px] font-semibold tracking-[-0.45px]">
@@ -274,7 +319,7 @@ export function EventRow({ event, index }: { event: HaraEvent; index: number }) 
               {event.title}
             </Link>
           </h3>
-          <FavoriteButton compact />
+          <FavoriteButton event={event} compact />
         </div>
         <div className="mt-3 min-w-0 text-[11px] leading-[13px] tracking-[0.06px]">
           <p className="truncate text-[#4e55c5]">{formatBakuDate(event.start_at, true)}</p>

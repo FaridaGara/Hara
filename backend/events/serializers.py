@@ -65,6 +65,10 @@ class EventDetailSerializer(EventSerializer):
         fields = EventSerializer.Meta.fields + ("ticket_types",)
 
 
+class FavoriteCreateSerializer(serializers.Serializer):
+    event_id = serializers.UUIDField()
+
+
 class OrganizerEventSerializer(serializers.ModelSerializer):
     category_id = serializers.PrimaryKeyRelatedField(
         source="category",

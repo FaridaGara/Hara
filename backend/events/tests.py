@@ -12,7 +12,140 @@ from rest_framework.test import APITestCase
 
 from ticketing.models import Order, OrderItem, Ticket, TicketType
 
-from .models import Category, Event, Venue
+from .models import Category, Event, Favorite, Venue
+
+
+class FavoriteAPITests(APITestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.organizer = get_user_model().objects.create_user(
+            email="favorite-organizer@hara.today",
+            password="StrongPass123!",
+            account_type="organizer",
+        )
+        cls.user = get_user_model().objects.create_user(
+            email="favorite-user@hara.today",
+            password="StrongPass123!",
+            account_type="attendee",
+        )
+        cls.other_user = get_user_model().objects.create_user(
+            email="favorite-other@hara.today",
+            password="StrongPass123!",
+            account_type="attendee",
+        )
+        cls.category = Category.objects.create(
+            name="Favorite Music",
+            slug="favorite-music",
+        )
+        cls.venue = Venue.objects.create(
+            name="Favorite Venue",
+            city="Bakı",
+            address="Favorite test ünvanı",
+            location=Point(49.84, 40.37, srid=4326),
+        )
+        start_at = timezone.now() + timedelta(days=7)
+        cls.published_event = Event.objects.create(
+            organizer=cls.organizer,
+            category=cls.category,
+            venue=cls.venue,
+            title="Sevimli yayımlanmış tədbir",
+            description="Favorite API testi",
+            start_at=start_at,
+            end_at=start_at + timedelta(hours=2),
+            status=Event.Status.PUBLISHED,
+        )
+        cls.draft_event = Event.objects.create(
+            organizer=cls.organizer,
+            category=cls.category,
+            venue=cls.venue,
+            title="Sevimli draft tədbir",
+            description="Favorite API-də seçilə bilməz",
+            start_at=start_at,
+            end_at=start_at + timedelta(hours=2),
+            status=Event.Status.DRAFT,
+        )
+
+    def setUp(self):
+        self.list_url = reverse("favorite-list")
+        self.detail_url = reverse(
+            "favorite-detail",
+            kwargs={"event_id": self.published_event.id},
+        )
+
+    def test_favorite_endpoints_require_authentication(self):
+        responses = [
+            self.client.get(self.list_url),
+            self.client.post(
+                self.list_url,
+                {"event_id": str(self.published_event.id)},
+                format="json",
+            ),
+            self.client.delete(self.detail_url),
+        ]
+
+        for response in responses:
+            self.assertEqual(
+                response.status_code,
+                status.HTTP_401_UNAUTHORIZED,
+            )
+
+    def test_user_can_add_list_and_remove_own_favorite(self):
+        self.client.force_authenticate(user=self.user)
+
+        created = self.client.post(
+            self.list_url,
+            {"event_id": str(self.published_event.id)},
+            format="json",
+        )
+        duplicate = self.client.post(
+            self.list_url,
+            {"event_id": str(self.published_event.id)},
+            format="json",
+        )
+        listed = self.client.get(self.list_url)
+
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(duplicate.status_code, status.HTTP_200_OK)
+        self.assertEqual(Favorite.objects.filter(user=self.user).count(), 1)
+        self.assertEqual(listed.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [event["id"] for event in listed.json()],
+            [str(self.published_event.id)],
+        )
+
+        deleted = self.client.delete(self.detail_url)
+        deleted_again = self.client.delete(self.detail_url)
+
+        self.assertEqual(deleted.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(
+            deleted_again.status_code,
+            status.HTTP_204_NO_CONTENT,
+        )
+        self.assertFalse(Favorite.objects.filter(user=self.user).exists())
+
+    def test_favorites_are_scoped_to_authenticated_user(self):
+        Favorite.objects.create(
+            user=self.other_user,
+            event=self.published_event,
+        )
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.get(self.list_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json(), [])
+
+    def test_draft_event_cannot_be_favorited(self):
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.post(
+            self.list_url,
+            {"event_id": str(self.draft_event.id)},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertFalse(Favorite.objects.filter(user=self.user).exists())
 
 
 class EventAPITests(TestCase):

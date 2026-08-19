@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { useAuth } from "./auth-provider";
+import { useFavorites } from "./favorites-provider";
 import { MobileTabBar } from "./mobile-tab-bar";
 import { type ThemePreference, useTheme } from "./theme-provider";
 
@@ -140,8 +141,8 @@ function MenuSection({
 export function MoreView() {
   const router = useRouter();
   const { logout, user } = useAuth();
+  const { favorites } = useFavorites();
   const { preference, setPreference } = useTheme();
-  const [favorite, setFavorite] = useState(false);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const fullName = [user?.first_name, user?.last_name].filter(Boolean).join(" ");
   const displayName = user?.display_name || fullName || "HARA istifadəçisi";
@@ -187,12 +188,16 @@ export function MoreView() {
         </h1>
         <button
           type="button"
-          aria-label={favorite ? "Sevimliləri bağla" : "Sevimliləri aç"}
-          aria-pressed={favorite}
-          onClick={() => setFavorite((value) => !value)}
-          className="grid size-10 shrink-0 place-items-center rounded-full bg-[var(--hara-surface)] transition active:scale-95"
+          aria-label="Sevimlilər"
+          onClick={() => router.push("/favorites")}
+          className="relative grid size-10 shrink-0 place-items-center rounded-full bg-[var(--hara-surface)] transition active:scale-95"
         >
-          <Image src="/figma/more/heart.svg" alt="" width={24} height={24} className="size-6" />
+          <Image src="/figma/more/heart.svg" alt="" width={24} height={24} className="hara-theme-icon size-6" />
+          {favorites.length ? (
+            <span className="absolute -top-1 -right-0.5 grid size-5 place-items-center rounded-full border border-[var(--hara-badge-border)] bg-[#ff2c3d] text-[9px] leading-3 font-medium text-white">
+              {favorites.length > 9 ? "9+" : favorites.length}
+            </span>
+          ) : null}
         </button>
       </header>
 

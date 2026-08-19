@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.gis.admin import GISModelAdmin
 
-from .models import Category, Event, Venue
+from .models import Category, Event, Favorite, Venue
 
 
 @admin.register(Category)
@@ -47,3 +47,12 @@ class EventAdmin(admin.ModelAdmin):
     autocomplete_fields = ("organizer", "category", "venue")
     readonly_fields = ("slug", "created_at", "updated_at")
     date_hierarchy = "start_at"
+
+
+@admin.register(Favorite)
+class FavoriteAdmin(admin.ModelAdmin):
+    list_display = ("user", "event", "created_at")
+    search_fields = ("user__email", "event__title")
+    autocomplete_fields = ("user", "event")
+    readonly_fields = ("created_at",)
+    date_hierarchy = "created_at"

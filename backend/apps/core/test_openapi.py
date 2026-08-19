@@ -50,6 +50,8 @@ class OpenAPIContractTests(APISimpleTestCase):
         expected_paths = {
             "/api/health/",
             "/api/events/",
+            "/api/favorites/",
+            "/api/favorites/{event_id}/",
             "/api/orders/",
             "/api/orders/{order_id}/payments/",
             "/api/payments/sandbox/{payment_id}/complete/",
@@ -86,6 +88,10 @@ class OpenAPIContractTests(APISimpleTestCase):
         self.assertIn(
             "security",
             self.schema["paths"]["/api/orders/"]["post"],
+        )
+        self.assertIn(
+            "security",
+            self.schema["paths"]["/api/favorites/"]["get"],
         )
 
         for path, method in [

@@ -3,6 +3,7 @@ import Script from "next/script";
 
 import { AppShell } from "@/components/app-shell";
 import { AuthProvider } from "@/components/auth-provider";
+import { FavoritesProvider } from "@/components/favorites-provider";
 import {
   THEME_INIT_SCRIPT,
   ThemeProvider,
@@ -35,7 +36,9 @@ export default function RootLayout({
         </Script>
         <ThemeProvider>
           <AuthProvider>
-            <AppShell>{children}</AppShell>
+            <FavoritesProvider>
+              <AppShell>{children}</AppShell>
+            </FavoritesProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>

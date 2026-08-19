@@ -7,4 +7,4 @@ aptPkgs = [
 ]
 
 [start]
-cmd = "gunicorn config.wsgi:application"
+cmd = "python manage.py migrate --noinput && gunicorn config.wsgi:application"

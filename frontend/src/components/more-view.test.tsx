@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AuthProvider } from "./auth-provider";
+import { FavoritesProvider } from "./favorites-provider";
 import { MoreView } from "./more-view";
 import { THEME_STORAGE_KEY, ThemeProvider } from "./theme-provider";
 
@@ -10,6 +11,7 @@ const back = vi.fn();
 const push = vi.fn();
 
 vi.mock("next/navigation", () => ({
+  usePathname: () => "/more",
   useRouter: () => ({ back, push }),
 }));
 
@@ -25,7 +27,9 @@ describe("More view", () => {
     render(
       <ThemeProvider>
         <AuthProvider>
-          <MoreView />
+          <FavoritesProvider>
+            <MoreView />
+          </FavoritesProvider>
         </AuthProvider>
       </ThemeProvider>,
     );
@@ -53,6 +57,13 @@ describe("More view", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Çıxış" }));
     expect(push).toHaveBeenCalledWith("/");
+  });
+
+  it("header ürəyindən sevimlilər siyahısına keçir", async () => {
+    renderView();
+
+    await userEvent.click(screen.getByRole("button", { name: "Sevimlilər" }));
+    expect(push).toHaveBeenCalledWith("/favorites");
   });
 
   it("Görünüş panelində Sistem-i ilkin seçim edir və tema seçimini yadda saxlayır", async () => {

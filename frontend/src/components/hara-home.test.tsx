@@ -1,13 +1,55 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/lib/api";
 import { eventFixture } from "@/test/fixtures";
 
+import { FavoritesProvider } from "./favorites-provider";
 import { HaraHome } from "./hara-home";
 
+const apiMocks = vi.hoisted(() => ({
+  list: vi.fn(),
+  add: vi.fn(),
+  remove: vi.fn(),
+}));
+const push = vi.hoisted(() => vi.fn());
+const authState = vi.hoisted((): {
+  status: "loading" | "authenticated" | "anonymous";
+  user: { id: number; first_name: string; display_name: string } | null;
+} => ({ status: "anonymous", user: null }));
+
+vi.mock("@/lib/api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api")>();
+  return { ...actual, favoritesApi: apiMocks };
+});
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/",
+  useRouter: () => ({ push }),
+}));
+
+vi.mock("./auth-provider", () => ({
+  useAuth: () => authState,
+}));
+
 describe("Hara home", () => {
+  beforeEach(() => {
+    push.mockClear();
+    apiMocks.list.mockReset().mockResolvedValue([]);
+    apiMocks.add.mockReset().mockResolvedValue(eventFixture);
+    apiMocks.remove.mockReset().mockResolvedValue(undefined);
+    authState.status = "anonymous";
+    authState.user = null;
+  });
+
+  const renderHome = (loadEvents: Parameters<typeof HaraHome>[0]["loadEvents"]) =>
+    render(
+      <FavoritesProvider>
+        <HaraHome loadEvents={loadEvents} />
+      </FavoritesProvider>,
+    );
+
   it("public API event-lərini mövcud discovery dizaynında göstərir", async () => {
     const secondEvent = {
       ...eventFixture,
@@ -17,7 +59,7 @@ describe("Hara home", () => {
       is_featured: false,
     };
     const loadEvents = vi.fn().mockResolvedValue([eventFixture, secondEvent]);
-    render(<HaraHome loadEvents={loadEvents} />);
+    renderHome(loadEvents);
 
     expect(screen.getByText("Tədbirlər yüklənir…")).toBeTruthy();
     expect(await screen.findAllByText(eventFixture.title)).toHaveLength(2);
@@ -32,7 +74,7 @@ describe("Hara home", () => {
 
   it("Figma carousel boşluğunu və tarix formatını saxlayır", async () => {
     const loadEvents = vi.fn().mockResolvedValue([eventFixture]);
-    render(<HaraHome loadEvents={loadEvents} />);
+    renderHome(loadEvents);
     await screen.findAllByText(eventFixture.title);
 
     const carousel = screen
@@ -48,7 +90,7 @@ describe("Hara home", () => {
 
   it("search submit etdikdə API search filter-i ilə yenidən yükləyir", async () => {
     const loadEvents = vi.fn().mockResolvedValue([eventFixture]);
-    render(<HaraHome loadEvents={loadEvents} />);
+    renderHome(loadEvents);
     await screen.findAllByText(eventFixture.title);
 
     const input = screen.getByRole("searchbox", { name: "Tədbir axtar" });
@@ -68,7 +110,7 @@ describe("Hara home", () => {
       .fn()
       .mockRejectedValueOnce(new ApiError({ kind: "network", message: "Əlaqə yoxdur" }))
       .mockResolvedValueOnce([]);
-    render(<HaraHome loadEvents={loadEvents} />);
+    renderHome(loadEvents);
 
     expect((await screen.findByRole("alert")).textContent).toContain("Əlaqə yoxdur");
     await userEvent.click(screen.getByRole("button", { name: "Yenidən cəhd et" }));
@@ -76,7 +118,7 @@ describe("Hara home", () => {
   });
 
   it("Figma tab bar-da əsas səhifəni aktiv göstərir", () => {
-    const { container } = render(<HaraHome loadEvents={vi.fn().mockResolvedValue([])} />);
+    const { container } = renderHome(vi.fn().mockResolvedValue([]));
     const homeLink = screen.getByRole("link", { name: "Əsas səhifə" });
     const tabBar = screen.getByRole("navigation", { name: "Əsas naviqasiya" });
 
@@ -90,7 +132,7 @@ describe("Hara home", () => {
   });
 
   it("light və dark rejimdə eyni Figma HARA loqosunu saxlayır", () => {
-    const { container } = render(<HaraHome loadEvents={vi.fn().mockResolvedValue([])} />);
+    const { container } = renderHome(vi.fn().mockResolvedValue([]));
     const main = container.querySelector("main.hara-home");
 
     expect(main?.classList.contains("transition-colors")).toBe(true);
@@ -99,11 +141,39 @@ describe("Hara home", () => {
   });
 
   it("telefonun sistem status bar-ını tətbiq UI-sində göstərmir", () => {
-    const { container } = render(<HaraHome loadEvents={vi.fn().mockResolvedValue([])} />);
+    const { container } = renderHome(vi.fn().mockResolvedValue([]));
 
     expect(screen.queryByText("9:41")).toBeNull();
     expect(container.innerHTML).not.toContain("/figma/home/cellular.svg");
     expect(container.innerHTML).not.toContain("/figma/home/wifi.svg");
     expect(container.innerHTML).not.toContain("/figma/home/battery.svg");
+  });
+
+  it("istifadəçi adını göstərir, anonim istifadəçiyə isə sadə salam verir", () => {
+    const { rerender } = renderHome(vi.fn().mockResolvedValue([]));
+    expect(screen.getByText("Salam!")).toBeTruthy();
+    expect(screen.queryByText(/Monika/)).toBeNull();
+
+    authState.status = "authenticated";
+    authState.user = { id: 7, first_name: "Aysel", display_name: "Aysel Məmmədova" };
+    rerender(
+      <FavoritesProvider>
+        <HaraHome loadEvents={vi.fn().mockResolvedValue([])} />
+      </FavoritesProvider>,
+    );
+    expect(screen.getByText("Salam, Aysel 👋")).toBeTruthy();
+  });
+
+  it("ürəyə toxunanda tədbiri ümumi sevimlilər siyahısında saxlayır", async () => {
+    authState.status = "authenticated";
+    authState.user = { id: 7, first_name: "Aysel", display_name: "Aysel Məmmədova" };
+    renderHome(vi.fn().mockResolvedValue([eventFixture]));
+    await screen.findAllByText(eventFixture.title);
+
+    await userEvent.click(screen.getAllByRole("button", { name: "Sevimlilərə əlavə et" })[0]);
+
+    expect(screen.getAllByRole("button", { name: "Sevimlilərdən çıxar" }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("link", { name: "Sevimlilər" }).textContent).toBe("1");
+    await waitFor(() => expect(apiMocks.add).toHaveBeenCalledWith(eventFixture.id));
   });
 });

@@ -31,6 +31,8 @@ from apps.users.views import (
     UserProfileAPIView,
 )
 from events.views import (
+    FavoriteDetailAPIView,
+    FavoriteListCreateAPIView,
     OrganizerEventDetailAPIView,
     OrganizerEventListCreateAPIView,
 )
@@ -69,6 +71,16 @@ urlpatterns = [
     ),
     path("api/", include("apps.core.urls")),
     path("api/events/", include("events.urls")),
+    path(
+        "api/favorites/",
+        FavoriteListCreateAPIView.as_view(),
+        name="favorite-list",
+    ),
+    path(
+        "api/favorites/<uuid:event_id>/",
+        FavoriteDetailAPIView.as_view(),
+        name="favorite-detail",
+    ),
     path(
         "api/auth/login/",
         TokenObtainPairView.as_view(),

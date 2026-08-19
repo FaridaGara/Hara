@@ -7,6 +7,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { ApiError, eventsApi, type HaraEvent, type PublicTicketType } from "@/lib/api";
 import { formatBakuDate, safePosterUrl } from "@/lib/format";
 
+import { useFavorites } from "./favorites-provider";
 import { GoogleEventMap } from "./google-event-map";
 import { MobileTabBar } from "./mobile-tab-bar";
 
@@ -118,18 +119,27 @@ function matchesAdvancedFilters(event: HaraEvent, filters: AdvancedFilters) {
   return eventInBaku >= nowInBaku && eventInBaku <= endOfWeek;
 }
 
-function FavoriteButton() {
-  const [selected, setSelected] = useState(false);
+function FavoriteButton({ event }: { event: HaraEvent }) {
+  const { isFavorite, toggleFavorite } = useFavorites();
+  const selected = isFavorite(event.id);
 
   return (
     <button
       type="button"
       aria-label={selected ? "Sevimlilərdən çıxar" : "Sevimlilərə əlavə et"}
       aria-pressed={selected}
-      onClick={() => setSelected((value) => !value)}
+      onClick={(clickEvent) => {
+        clickEvent.preventDefault();
+        clickEvent.stopPropagation();
+        void toggleFavorite(event);
+      }}
       className="relative z-10 grid size-8 shrink-0 place-items-center rounded-full transition active:scale-95"
     >
-      <Image src="/figma/map/heart.svg" alt="" width={16} height={16} />
+      {selected ? (
+        <span className="text-[19px] leading-none text-[#ff2c3d]" aria-hidden="true">♥</span>
+      ) : (
+        <Image src="/figma/map/heart.svg" alt="" width={16} height={16} />
+      )}
     </button>
   );
 }
@@ -164,7 +174,7 @@ function MapEventCard({ event, compact = false }: { event: HaraEvent; compact?: 
               {event.title}
             </Link>
           </h2>
-          <FavoriteButton />
+          <FavoriteButton event={event} />
         </div>
         <div className="min-w-0 text-[11px] leading-[13px] tracking-[0.06px]">
           <p className="truncate text-[#4e55c5]">{formatBakuDate(event.start_at, true)}</p>
@@ -195,7 +205,7 @@ function ListEventCard({ event }: { event: HaraEvent }) {
                 {event.title}
               </Link>
             </h2>
-            <FavoriteButton />
+            <FavoriteButton event={event} />
           </div>
           <div className="min-w-0 text-[11px] leading-[13px] tracking-[0.06px]">
             <p className="truncate text-[#4e55c5]">{formatBakuDate(event.start_at, true)}</p>
