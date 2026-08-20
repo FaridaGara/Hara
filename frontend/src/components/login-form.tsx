@@ -8,14 +8,19 @@ import { ApiError } from "@/lib/api";
 import { safeLocalRedirect } from "@/lib/routes";
 
 import { useAuth } from "./auth-provider";
+import {
+  AuthButton,
+  AuthField,
+  AuthFrame,
+  AuthMessage,
+} from "./auth-ui";
 import { SocialLoginButtons } from "./social-login-buttons";
-import { InlineError } from "./states";
 
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { status, login } = useAuth();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,17 +34,18 @@ export function LoginForm() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (submitting) {
-      return;
-    }
+    if (submitting) return;
 
     setSubmitting(true);
     setError(null);
     try {
-      await login(email.trim(), password);
+      await login(identifier.trim(), password);
     } catch (caughtError) {
-      if (caughtError instanceof ApiError && caughtError.status === 401) {
-        setError("Email və ya şifrə yanlışdır.");
+      if (
+        caughtError instanceof ApiError &&
+        (caughtError.status === 400 || caughtError.status === 401)
+      ) {
+        setError("E-poçt, telefon və ya şifrə yanlışdır.");
       } else {
         setError(
           caughtError instanceof ApiError
@@ -53,69 +59,68 @@ export function LoginForm() {
   };
 
   return (
-    <main className="mx-auto grid min-h-[calc(100vh-65px)] w-full max-w-md place-items-center px-4 py-10 sm:px-6">
-      <section className="w-full rounded-3xl border border-white/10 bg-[#111118] p-6 sm:p-8">
-        <p className="text-xs font-bold tracking-[0.16em] text-[#98ff00] uppercase">
-          Xoş gəldin
+    <AuthFrame
+      title="Daxil ol"
+      subtitle="Hesabınıza daxil olun"
+      footer={
+        <p className="text-[var(--hara-auth-secondary)]">
+          Hesabın yoxdur?{" "}
+          <Link className="font-semibold text-[#4e55c5]" href="/register">
+            Qeydiyyatdan keç
+          </Link>
         </p>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight">Hesabına daxil ol</h1>
-        <p className="mt-2 text-sm leading-6 text-white/50">
-          Mövcud HARA hesabının email və şifrəsini istifadə et.
-        </p>
-
-        <SocialLoginButtons />
-        <div className="my-6 flex items-center gap-3 text-xs text-white/35">
-          <span className="h-px flex-1 bg-white/10" />
-          <span>və ya email ilə</span>
-          <span className="h-px flex-1 bg-white/10" />
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <label className="block">
-            <span className="text-sm font-semibold text-white/75">Email</span>
-            <input
-              type="email"
-              name="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              disabled={submitting}
-              className="mt-2 min-h-12 w-full rounded-xl border border-white/10 bg-white/[0.06] px-4 text-base outline-none focus:border-[#98ff00] disabled:opacity-60"
-            />
-          </label>
-          <label className="block">
-            <span className="text-sm font-semibold text-white/75">Şifrə</span>
-            <input
-              type="password"
-              name="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              disabled={submitting}
-              className="mt-2 min-h-12 w-full rounded-xl border border-white/10 bg-white/[0.06] px-4 text-base outline-none focus:border-[#98ff00] disabled:opacity-60"
-            />
-          </label>
-
-          {error ? <InlineError message={error} /> : null}
-
-          <button
+      }
+    >
+      <div className="flex flex-col gap-4 p-6">
+        {searchParams.get("reset") === "success" ? (
+          <AuthMessage tone="success">Şifrəniz yeniləndi. Yeni şifrə ilə daxil olun.</AuthMessage>
+        ) : null}
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <AuthField
+            label="E-poçt və ya telefon"
+            icon="lock"
+            name="identifier"
+            autoComplete="username"
+            required
+            value={identifier}
+            onChange={(event) => setIdentifier(event.target.value)}
+            disabled={submitting}
+          />
+          <AuthField
+            label="Şifrə"
+            icon="eye"
+            type="password"
+            name="password"
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            disabled={submitting}
+          />
+          <div className="flex justify-end">
+            <Link
+              href="/forgot-password"
+              className="text-[13px] leading-[18px] font-semibold tracking-[-0.08px] text-[#4e55c5]"
+            >
+              Şifrəni unutdun?
+            </Link>
+          </div>
+          {error ? <AuthMessage>{error}</AuthMessage> : null}
+          <AuthButton
             type="submit"
-            disabled={submitting || !email.trim() || !password}
-            className="min-h-12 w-full rounded-xl bg-[#98ff00] px-5 font-bold text-[#18181a] transition hover:bg-[#b0ff3d] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={submitting || !identifier.trim() || !password}
           >
             {submitting ? "Daxil olunur…" : "Daxil ol"}
-          </button>
+          </AuthButton>
         </form>
 
-        <Link
-          href="/"
-          className="mt-3 grid min-h-11 place-items-center rounded-xl text-sm font-semibold text-white/50 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#98ff00]"
-        >
-          Kəşfə qayıt
-        </Link>
-      </section>
-    </main>
+        <div className="flex items-center gap-3 py-2 text-[13px] text-[var(--hara-auth-muted)]">
+          <span className="h-px flex-1 bg-[var(--hara-auth-field)]" />
+          <span>və ya</span>
+          <span className="h-px flex-1 bg-[var(--hara-auth-field)]" />
+        </div>
+        <SocialLoginButtons />
+      </div>
+    </AuthFrame>
   );
 }

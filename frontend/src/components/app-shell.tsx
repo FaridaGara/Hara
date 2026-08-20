@@ -21,19 +21,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     pathname === "/tickets" ||
     pathname === "/favorites" ||
     pathname === "/more";
+  const usesAuthShell = [
+    "/login",
+    "/register",
+    "/verify",
+    "/forgot-password",
+    "/reset-password",
+  ].some((route) => pathname === route || pathname.startsWith(`${route}/`));
 
   const handleLogout = () => {
     logout();
     router.push("/");
   };
 
-  const shellClassName = usesDiscoveryShell
-    ? "min-h-screen bg-[var(--background)] text-[var(--foreground)] transition-colors sm:py-px"
+  const shellClassName = usesDiscoveryShell || usesAuthShell
+    ? "min-h-screen bg-[var(--background)] text-[var(--foreground)] transition-colors"
     : "min-h-screen bg-[#09090e] text-white";
 
   return (
     <div className={shellClassName}>
-      {!usesDiscoveryShell ? <header className="sticky top-0 z-30 border-b border-white/[0.08] bg-[#111118]/95 backdrop-blur-xl">
+      {!usesDiscoveryShell && !usesAuthShell ? <header className="sticky top-0 z-30 border-b border-white/[0.08] bg-[#111118]/95 backdrop-blur-xl">
         <div className="mx-auto flex min-h-16 max-w-5xl items-center justify-between gap-3 px-4 sm:px-6">
           <Link
             href="/"

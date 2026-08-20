@@ -10,7 +10,13 @@ import {
 } from "react";
 
 import { authApi } from "@/lib/api";
-import type { SocialProvider, UserProfile, UserProfileUpdate } from "@/lib/api";
+import type {
+  AuthDeliveryResponse,
+  RegistrationRequest,
+  SocialProvider,
+  UserProfile,
+  UserProfileUpdate,
+} from "@/lib/api";
 import {
   getAccessToken,
   getRefreshToken,
@@ -24,10 +30,13 @@ type AuthContextValue = {
   status: AuthStatus;
   user: UserProfile | null;
   login: (email: string, password: string) => Promise<void>;
+  register: (payload: RegistrationRequest) => Promise<AuthDeliveryResponse>;
+  verifyEmail: (email: string, code: string) => Promise<void>;
   socialLogin: (
     provider: SocialProvider,
     credential: string,
     profile?: { firstName?: string; lastName?: string },
+    nonce?: string,
   ) => Promise<void>;
   updateProfile: (profile: Partial<UserProfileUpdate>) => Promise<UserProfile>;
   refreshProfile: () => Promise<UserProfile | null>;
@@ -58,11 +67,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    await authApi.login(email, password);
+    const session = await authApi.login(email, password);
+    setUser(session.user);
     setStatus("authenticated");
-    if (hasSession()) {
-      void authApi.me().then(setUser).catch(() => undefined);
-    }
+  }, []);
+
+  const register = useCallback((payload: RegistrationRequest) => {
+    return authApi.register(payload);
+  }, []);
+
+  const verifyEmail = useCallback(async (email: string, code: string) => {
+    const session = await authApi.verifyEmail(email, code);
+    setUser(session.user);
+    setStatus("authenticated");
   }, []);
 
   const socialLogin = useCallback(
@@ -70,8 +87,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       provider: SocialProvider,
       credential: string,
       profile?: { firstName?: string; lastName?: string },
+      nonce?: string,
     ) => {
-      const session = await authApi.socialLogin(provider, credential, profile);
+      const session = await authApi.socialLogin(
+        provider,
+        credential,
+        profile,
+        nonce,
+      );
       setUser(session.user);
       setStatus("authenticated");
     },
@@ -105,12 +128,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       status,
       user,
       login,
+      register,
+      verifyEmail,
       socialLogin,
       updateProfile,
       refreshProfile,
       logout,
     }),
-    [status, user, login, socialLogin, updateProfile, refreshProfile, logout],
+    [
+      status,
+      user,
+      login,
+      register,
+      verifyEmail,
+      socialLogin,
+      updateProfile,
+      refreshProfile,
+      logout,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -28,7 +28,13 @@ Access notation:
 
 | Method | Path | URL name | Access | Request / query | Success | Main errors | Purpose |
 |---|---|---|---|---|---|---|---|
-| POST | `/api/auth/login/` | `auth-login` | Public | Body: `email`, `password` | 200 `{access, refresh}` | 400 invalid input; 401 invalid credentials | Obtain JWT pair |
+| POST | `/api/auth/login/` | `auth-login` | Public | Body: `identifier` (email or phone), `password` | 200 `{access, refresh, user}` | 401 invalid credentials | Obtain JWT pair |
+| POST | `/api/auth/register/` | `auth-register` | Public | Name, email, Azerbaijan phone, matching strong passwords, accepted terms | 201 delivery metadata | 400 duplicate/invalid input | Create inactive account and email a four-digit code |
+| POST | `/api/auth/verify-email/` | `auth-verify-email` | Public | Body: `email`, `code` | 200 `{access, refresh, user}` | 400 invalid/expired/locked code | Activate the account and start a session |
+| POST | `/api/auth/verification/resend/` | `auth-verification-resend` | Public | Body: `email`, `purpose` | 200 generic delivery response | 429 resend cooldown | Replace the previous verification code |
+| POST | `/api/auth/password-reset/request/` | `auth-password-reset-request` | Public | Body: `email` | 200 generic delivery response | 429 resend cooldown | Request password reset without revealing account existence |
+| POST | `/api/auth/password-reset/verify/` | `auth-password-reset-verify` | Public | Body: `email`, `code` | 200 short-lived reset token | 400 invalid/expired/locked code | Verify reset code |
+| POST | `/api/auth/password-reset/confirm/` | `auth-password-reset-confirm` | Public | Reset token and matching strong passwords | 200 success message | 400 invalid/used/expired token | Set a new password; token is single-use |
 | POST | `/api/auth/refresh/` | `auth-refresh` | Public | Body: `refresh` | 200 `{access}` and optional rotated refresh according to JWT settings | 400 malformed input; 401 invalid/expired refresh token | Refresh access token |
 
 ## Public events

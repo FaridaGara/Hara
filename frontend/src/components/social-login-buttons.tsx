@@ -1,6 +1,7 @@
 "use client";
 
 import Script from "next/script";
+import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ApiError } from "@/lib/api";
@@ -65,6 +66,7 @@ export function SocialLoginButtons() {
   const { socialLogin } = useAuth();
   const googleButtonRef = useRef<HTMLDivElement>(null);
   const appleStateRef = useRef("");
+  const appleNonceRef = useRef("");
   const [pendingProvider, setPendingProvider] = useState<"google" | "apple" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -73,11 +75,12 @@ export function SocialLoginButtons() {
       provider: "google" | "apple",
       credential: string,
       profile?: { firstName?: string; lastName?: string },
+      nonce?: string,
     ) => {
       setError(null);
       setPendingProvider(provider);
       try {
-        await socialLogin(provider, credential, profile);
+        await socialLogin(provider, credential, profile, nonce);
       } catch (caughtError) {
         setError(providerErrorMessage(caughtError));
       } finally {
@@ -118,12 +121,13 @@ export function SocialLoginButtons() {
       return;
     }
     appleStateRef.current = randomToken();
+    appleNonceRef.current = randomToken();
     window.AppleID.auth.init({
       clientId: appleClientId,
       scope: "name email",
       redirectURI: appleRedirectUri,
       state: appleStateRef.current,
-      nonce: randomToken(),
+      nonce: appleNonceRef.current,
       usePopup: true,
     });
   }, []);
@@ -143,7 +147,7 @@ export function SocialLoginButtons() {
       void completeLogin("apple", credential, {
         firstName: detail.user?.name?.firstName,
         lastName: detail.user?.name?.lastName,
-      });
+      }, appleNonceRef.current);
     };
     const handleFailure = () => {
       setPendingProvider(null);
@@ -157,10 +161,8 @@ export function SocialLoginButtons() {
     };
   }, [completeLogin]);
 
-  const isConfigured = googleClientId || (appleClientId && appleRedirectUri);
-
   return (
-    <div className="mt-7 space-y-3" aria-label="Sosial hesabla giriş">
+    <div className="space-y-3" aria-label="Sosial hesabla giriş">
       {googleClientId ? (
         <>
           <Script
@@ -170,11 +172,12 @@ export function SocialLoginButtons() {
           />
           <div
             ref={googleButtonRef}
-            className={`min-h-11 overflow-hidden rounded-md ${pendingProvider ? "pointer-events-none opacity-60" : ""}`}
+            className={`min-h-12 overflow-hidden rounded-2xl bg-[var(--hara-auth-field)] ${pendingProvider ? "pointer-events-none opacity-60" : ""}`}
           />
         </>
       ) : (
-        <button type="button" disabled className="min-h-12 w-full rounded-xl border border-white/15 bg-white px-4 font-semibold text-black opacity-50">
+        <button type="button" disabled className="flex min-h-12 w-full items-center justify-center gap-3 rounded-2xl bg-[var(--hara-auth-field)] px-4 text-[13px] text-[var(--hara-auth-text)] opacity-50">
+          <Image src="/figma/auth/google.svg" alt="" width={24} height={24} />
           Google ilə davam et
         </button>
       )}
@@ -194,26 +197,22 @@ export function SocialLoginButtons() {
             data-mode="center-align"
             data-width="100%"
             data-height="48"
-            className={pendingProvider ? "pointer-events-none opacity-60" : ""}
+            className={`overflow-hidden rounded-2xl bg-[var(--hara-auth-field)] ${pendingProvider ? "pointer-events-none opacity-60" : ""}`}
           />
         </>
       ) : (
-        <button type="button" disabled className="min-h-12 w-full rounded-xl border border-white/15 bg-black px-4 font-semibold text-white opacity-50">
+        <button type="button" disabled className="flex min-h-12 w-full items-center justify-center gap-3 rounded-2xl bg-[var(--hara-auth-field)] px-4 text-[13px] text-[var(--hara-auth-text)] opacity-50">
+          <Image src="/figma/auth/apple.svg" alt="" width={20} height={20} className="hara-auth-icon" />
           Apple ilə davam et
         </button>
       )}
 
       {pendingProvider ? (
-        <p role="status" className="text-center text-xs text-white/55">
+        <p role="status" className="text-center text-xs text-[var(--hara-auth-secondary)]">
           {pendingProvider === "google" ? "Google" : "Apple"} hesabı yoxlanılır…
         </p>
       ) : null}
-      {error ? <p role="alert" className="text-sm text-red-300">{error}</p> : null}
-      {!isConfigured ? (
-        <p className="text-center text-xs leading-5 text-white/40">
-          Sosial giriş deploy dəyişənləri əlavə ediləndən sonra aktiv olacaq.
-        </p>
-      ) : null}
+      {error ? <p role="alert" className="text-sm text-red-500">{error}</p> : null}
     </div>
   );
 }

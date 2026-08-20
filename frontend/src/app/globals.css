@@ -17,6 +17,12 @@
   --hara-retry-bg: #18181a;
   --hara-retry-text: #ffffff;
   --hara-badge-border: #ffffff;
+  --hara-auth-outer: #ebedee;
+  --hara-auth-page: #ffffff;
+  --hara-auth-field: #f3f5f7;
+  --hara-auth-text: rgba(0, 0, 0, 0.92);
+  --hara-auth-secondary: rgba(0, 0, 0, 0.66);
+  --hara-auth-muted: rgba(0, 0, 0, 0.38);
   color-scheme: light;
   --hara-safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
   --hara-safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
@@ -39,6 +45,12 @@
   --hara-retry-bg: #98ff00;
   --hara-retry-text: #18181a;
   --hara-badge-border: #111118;
+  --hara-auth-outer: #09090e;
+  --hara-auth-page: #111118;
+  --hara-auth-field: #1f1f33;
+  --hara-auth-text: rgba(255, 255, 255, 0.92);
+  --hara-auth-secondary: rgba(255, 255, 255, 0.66);
+  --hara-auth-muted: rgba(255, 255, 255, 0.38);
   color-scheme: dark;
 }
 
@@ -60,6 +72,12 @@
     --hara-retry-bg: #98ff00;
     --hara-retry-text: #18181a;
     --hara-badge-border: #111118;
+    --hara-auth-outer: #09090e;
+    --hara-auth-page: #111118;
+    --hara-auth-field: #1f1f33;
+    --hara-auth-text: rgba(255, 255, 255, 0.92);
+    --hara-auth-secondary: rgba(255, 255, 255, 0.66);
+    --hara-auth-muted: rgba(255, 255, 255, 0.38);
     color-scheme: dark;
   }
 }
@@ -81,6 +99,20 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Inter, Arial, sans-serif;
   background: var(--hara-page);
   color: var(--hara-primary);
+}
+
+.hara-auth {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Inter, Arial, sans-serif;
+}
+
+:root[data-theme="dark"] .hara-auth-icon {
+  filter: brightness(0) invert(1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .hara-auth-icon {
+    filter: brightness(0) invert(1);
+  }
 }
 
 .theme-dark-only {
