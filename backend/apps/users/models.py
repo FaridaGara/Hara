@@ -19,13 +19,21 @@ class UserManager(BaseUserManager):
         return user
 
     def create_user(self, email, password=None, **extra_fields):
-        extra_fields.setdefault("is_staff", False)
+        account_type = extra_fields.setdefault(
+            "account_type",
+            self.model.AccountType.USER,
+        )
+        extra_fields.setdefault(
+            "is_staff",
+            account_type == self.model.AccountType.ADMIN,
+        )
         extra_fields.setdefault("is_superuser", False)
         return self._create_user(email, password, **extra_fields)
 
     def create_superuser(self, email, password=None, **extra_fields):
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
+        extra_fields.setdefault("account_type", self.model.AccountType.ADMIN)
 
         if extra_fields.get("is_staff") is not True:
             raise ValueError("Superuser must have is_staff=True.")
@@ -37,15 +45,16 @@ class UserManager(BaseUserManager):
 
 class User(AbstractUser):
     class AccountType(models.TextChoices):
-        ATTENDEE = "attendee", "Attendee"
+        USER = "user", "User"
         ORGANIZER = "organizer", "Organizer"
+        ADMIN = "admin", "Admin"
 
     username = None
     email = models.EmailField(unique=True)
     account_type = models.CharField(
         max_length=16,
         choices=AccountType.choices,
-        default=AccountType.ATTENDEE,
+        default=AccountType.USER,
     )
     display_name = models.CharField(max_length=150, blank=True)
     phone_number = models.CharField(max_length=32, blank=True)
@@ -57,6 +66,31 @@ class User(AbstractUser):
     REQUIRED_FIELDS = []
 
     objects = UserManager()
+
+    @property
+    def role(self):
+        if self.is_superuser:
+            return "superadmin"
+        return self.account_type
+
+    def save(self, *args, **kwargs):
+        if self.is_superuser:
+            self.account_type = self.AccountType.ADMIN
+
+        should_be_staff = (
+            self.is_superuser
+            or self.account_type == self.AccountType.ADMIN
+        )
+        self.is_staff = should_be_staff
+
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None:
+            kwargs["update_fields"] = set(update_fields) | {
+                "account_type",
+                "is_staff",
+            }
+
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.display_name or self.email

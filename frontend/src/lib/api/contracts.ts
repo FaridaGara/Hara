@@ -58,6 +58,8 @@ export type AuthTokenPair = {
 
 export type SocialProvider = "google" | "apple";
 
+export type UserRole = "user" | "organizer" | "admin" | "superadmin";
+
 export type UserProfile = {
   id: number;
   email: string;
@@ -68,7 +70,8 @@ export type UserProfile = {
   avatar_url: string;
   birth_date: string | null;
   interests: string[];
-  account_type: "attendee" | "organizer";
+  account_type: "user" | "organizer" | "admin";
+  role: UserRole;
   providers: SocialProvider[];
 };
 

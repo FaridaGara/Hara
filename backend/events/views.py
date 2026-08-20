@@ -31,7 +31,7 @@ from .models import (
     VenueSeat,
     VenueSection,
 )
-from .permissions import IsOrganizer
+from .permissions import HasAdminModelPermission, IsOrganizer
 from .serializers import (
     EventDetailSerializer,
     EventSeatingPlanSerializer,
@@ -302,36 +302,28 @@ class FavoriteDetailAPIView(APIView):
         ),
     ),
 )
-class OrganizerVenueListCreateAPIView(ListCreateAPIView):
+class AdminVenueListCreateAPIView(ListCreateAPIView):
     serializer_class = OrganizerVenueSerializer
-    permission_classes = [IsOrganizer]
+    permission_classes = [HasAdminModelPermission]
+    permission_resource = "venue"
 
     def get_queryset(self):
         queryset = Venue.objects.prefetch_related("plans").order_by("name")
 
-        if self.request.user.is_staff:
-            return queryset
-
-        return queryset.filter(
-            Q(created_by=self.request.user) | Q(created_by__isnull=True)
-        )
+        return queryset
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
 
 
-class OrganizerVenueDetailAPIView(RetrieveUpdateDestroyAPIView):
+class AdminVenueDetailAPIView(RetrieveUpdateDestroyAPIView):
     serializer_class = OrganizerVenueSerializer
-    permission_classes = [IsOrganizer]
+    permission_classes = [HasAdminModelPermission]
+    permission_resource = "venue"
     lookup_field = "id"
 
     def get_queryset(self):
-        queryset = Venue.objects.prefetch_related("plans")
-
-        if self.request.user.is_staff:
-            return queryset
-
-        return queryset.filter(created_by=self.request.user)
+        return Venue.objects.prefetch_related("plans")
 
     def destroy(self, request, *args, **kwargs):
         venue = self.get_object()
@@ -347,15 +339,16 @@ class OrganizerVenueDetailAPIView(RetrieveUpdateDestroyAPIView):
         return super().destroy(request, *args, **kwargs)
 
 
-class OrganizerVenuePlanListCreateAPIView(ListCreateAPIView):
+class AdminVenuePlanListCreateAPIView(ListCreateAPIView):
     serializer_class = VenuePlanSerializer
-    permission_classes = [IsOrganizer]
+    permission_classes = [HasAdminModelPermission]
+    permission_resource = "venueplan"
 
     def get_venue(self):
-        queryset = Venue.objects.all()
-        if not self.request.user.is_staff:
-            queryset = queryset.filter(created_by=self.request.user)
-        return get_object_or_404(queryset, id=self.kwargs["venue_id"])
+        return get_object_or_404(
+            Venue.objects.all(),
+            id=self.kwargs["venue_id"],
+        )
 
     def get_queryset(self):
         return (
@@ -371,17 +364,16 @@ class OrganizerVenuePlanListCreateAPIView(ListCreateAPIView):
         return context
 
 
-class OrganizerVenuePlanDetailAPIView(RetrieveDestroyAPIView):
+class AdminVenuePlanDetailAPIView(RetrieveDestroyAPIView):
     serializer_class = VenuePlanSerializer
-    permission_classes = [IsOrganizer]
+    permission_classes = [HasAdminModelPermission]
+    permission_resource = "venueplan"
 
     def get_queryset(self):
         queryset = VenuePlan.objects.prefetch_related("sections__seats").filter(
             venue_id=self.kwargs["venue_id"]
         )
-        if self.request.user.is_staff:
-            return queryset
-        return queryset.filter(venue__created_by=self.request.user)
+        return queryset
 
     def destroy(self, request, *args, **kwargs):
         plan = self.get_object()
@@ -419,7 +411,7 @@ class OrganizerEventListCreateAPIView(ListCreateAPIView):
             .order_by("-created_at")
         )
 
-        if self.request.user.is_staff:
+        if self.request.user.is_superuser:
             return queryset
 
         return queryset.filter(organizer=self.request.user)
@@ -475,7 +467,7 @@ class OrganizerEventDetailAPIView(RetrieveUpdateDestroyAPIView):
             .select_related("category", "venue", "organizer")
         )
 
-        if self.request.user.is_staff:
+        if self.request.user.is_superuser:
             return queryset
 
         return queryset.filter(organizer=self.request.user)

@@ -9,8 +9,10 @@ Access notation:
 
 - Public: no Bearer token is required.
 - JWT: `Authorization: Bearer <access-token>` is required.
-- Organizer: JWT plus organizer account type; staff is accepted by the current
-  permission class.
+- User: the default customer role; can browse, favorite and buy tickets.
+- Organizer: JWT plus organizer account type; owns its events and ticket data.
+- Admin: JWT plus admin account type and the relevant Django model permission.
+- Superadmin: Django superuser; bypasses role and model-permission checks.
 - Owned: database queries are scoped to the authenticated user. Cross-owner
   object access returns 404.
 
@@ -57,7 +59,7 @@ missing favorite is also idempotent.
 | POST | `/api/favorites/` | `favorite-list` | JWT | Body: `event_id` UUID | 201 added event; 200 existing favorite | 400 malformed UUID; 401; 404 unpublished/inactive/missing event | Add an event to favorites |
 | DELETE | `/api/favorites/<event_id>/` | `favorite-detail` | JWT; Owned | Event UUID | 204, including repeated removal | 401 | Remove an event from favorites |
 
-## Organizer venues and plans
+## Admin venues and plans
 
 A venue owns reusable, versioned plans. Each plan can contain general-admission
 or reserved-seating sections, optional geometry, colors, capacity, and
@@ -68,27 +70,27 @@ for different events.
 
 | Method | Path | URL name | Access | Request / query | Success | Main errors | Purpose |
 |---|---|---|---|---|---|---|---|
-| GET | `/api/organizer/venues/` | `organizer-venue-list` | Organizer; own plus shared legacy venues, staff sees all | None | 200 venue array with plan summaries | 401; 403 | List usable venues |
-| POST | `/api/organizer/venues/` | `organizer-venue-list` | Organizer | Venue fields plus `latitude`, `longitude`; optional nested `plan` with `sections` and `seats` | 201 venue | 400 validation; 401; 403 | Create a venue and optional first plan atomically |
-| GET | `/api/organizer/venues/<venue_id>/` | `organizer-venue-detail` | Organizer; Owned, staff bypass | Venue UUID | 200 venue | 401; 403; 404 | Venue detail |
-| PUT | `/api/organizer/venues/<venue_id>/` | `organizer-venue-detail` | Organizer; Owned, staff bypass | Full venue body | 200 venue | 400; 401; 403; 404 | Replace venue metadata |
-| PATCH | `/api/organizer/venues/<venue_id>/` | `organizer-venue-detail` | Organizer; Owned, staff bypass | Partial venue body | 200 venue | 400; 401; 403; 404 | Update venue metadata |
-| DELETE | `/api/organizer/venues/<venue_id>/` | `organizer-venue-detail` | Organizer; Owned, staff bypass | None | 204 | 401; 403; 404; 409 venue is used by an event | Delete an unused venue |
-| GET | `/api/organizer/venues/<venue_id>/plans/` | `organizer-venue-plan-list` | Organizer; Owned, staff bypass | Venue UUID | 200 full plan array | 401; 403; 404 | List versioned plans |
-| POST | `/api/organizer/venues/<venue_id>/plans/` | `organizer-venue-plan-list` | Organizer; Owned, staff bypass | Plan with optional background URL and nested sections/seats | 201 plan with next version | 400; 401; 403; 404 | Create the next immutable plan version |
-| GET | `/api/organizer/venues/<venue_id>/plans/<plan_id>/` | `organizer-venue-plan-detail` | Organizer; Owned, staff bypass | Venue and plan UUIDs | 200 full plan | 401; 403; 404 | Plan detail |
-| DELETE | `/api/organizer/venues/<venue_id>/plans/<plan_id>/` | `organizer-venue-plan-detail` | Organizer; Owned, staff bypass | None | 204 | 401; 403; 404; 409 plan is used by an event | Delete an unused plan version |
+| GET | `/api/admin/venues/` | `admin-venue-list` | Admin + `events.view_venue`; Superadmin | None | 200 venue array with plan summaries | 401; 403 | List managed venues |
+| POST | `/api/admin/venues/` | `admin-venue-list` | Admin + `events.add_venue`; Superadmin | Venue fields plus `latitude`, `longitude`; optional nested `plan` with `sections` and `seats` | 201 venue | 400 validation; 401; 403 | Create a venue and optional first plan atomically |
+| GET | `/api/admin/venues/<venue_id>/` | `admin-venue-detail` | Admin + `events.view_venue`; Superadmin | Venue UUID | 200 venue | 401; 403; 404 | Venue detail |
+| PUT | `/api/admin/venues/<venue_id>/` | `admin-venue-detail` | Admin + `events.change_venue`; Superadmin | Full venue body | 200 venue | 400; 401; 403; 404 | Replace venue metadata |
+| PATCH | `/api/admin/venues/<venue_id>/` | `admin-venue-detail` | Admin + `events.change_venue`; Superadmin | Partial venue body | 200 venue | 400; 401; 403; 404 | Update venue metadata |
+| DELETE | `/api/admin/venues/<venue_id>/` | `admin-venue-detail` | Admin + `events.delete_venue`; Superadmin | None | 204 | 401; 403; 404; 409 venue is used by an event | Delete an unused venue |
+| GET | `/api/admin/venues/<venue_id>/plans/` | `admin-venue-plan-list` | Admin + `events.view_venueplan`; Superadmin | Venue UUID | 200 full plan array | 401; 403; 404 | List versioned plans |
+| POST | `/api/admin/venues/<venue_id>/plans/` | `admin-venue-plan-list` | Admin + `events.add_venueplan`; Superadmin | Plan with optional background URL and nested sections/seats | 201 plan with next version | 400; 401; 403; 404 | Create the next immutable plan version |
+| GET | `/api/admin/venues/<venue_id>/plans/<plan_id>/` | `admin-venue-plan-detail` | Admin + `events.view_venueplan`; Superadmin | Venue and plan UUIDs | 200 full plan | 401; 403; 404 | Plan detail |
+| DELETE | `/api/admin/venues/<venue_id>/plans/<plan_id>/` | `admin-venue-plan-detail` | Admin + `events.delete_venueplan`; Superadmin | None | 204 | 401; 403; 404; 409 plan is used by an event | Delete an unused plan version |
 
 ## Organizer events
 
 | Method | Path | URL name | Access | Request / query | Success | Main errors | Purpose |
 |---|---|---|---|---|---|---|---|
-| GET | `/api/organizer/events/` | `organizer-event-list` | Organizer; own events, staff sees all | None | 200 event array | 401 unauthenticated; 403 non-organizer | Organizer event list |
+| GET | `/api/organizer/events/` | `organizer-event-list` | Organizer; own events, Superadmin sees all | None | 200 event array | 401 unauthenticated; 403 non-organizer | Organizer event list |
 | POST | `/api/organizer/events/` | `organizer-event-list` | Organizer | Body: `title`, `description`, `category_id`, `venue_id`, `start_at`, `end_at`, `status`; optional `cover_image_url`, `venue_plan_id` | 201 event | 400 validation; 401; 403 | Create organizer-owned event |
-| GET | `/api/organizer/events/<slug>/` | `organizer-event-detail` | Organizer; Owned, staff bypass | Slug path parameter | 200 event | 401; 403; 404 ownership/not found | Organizer event detail |
-| PUT | `/api/organizer/events/<slug>/` | `organizer-event-detail` | Organizer; Owned, staff bypass | Full organizer event body | 200 event | 400 validation; 401; 403; 404; 409 ticketed event lock | Replace event |
-| PATCH | `/api/organizer/events/<slug>/` | `organizer-event-detail` | Organizer; Owned, staff bypass | Partial organizer event body | 200 event | 400; 401; 403; 404; 409 ticketed event lock | Update event |
-| DELETE | `/api/organizer/events/<slug>/` | `organizer-event-detail` | Organizer; Owned, staff bypass | None | 204 | 401; 403; 404; 409 ticket history exists | Delete unticketed event |
+| GET | `/api/organizer/events/<slug>/` | `organizer-event-detail` | Organizer; Owned, Superadmin bypass | Slug path parameter | 200 event | 401; 403; 404 ownership/not found | Organizer event detail |
+| PUT | `/api/organizer/events/<slug>/` | `organizer-event-detail` | Organizer; Owned, Superadmin bypass | Full organizer event body | 200 event | 400 validation; 401; 403; 404; 409 ticketed event lock | Replace event |
+| PATCH | `/api/organizer/events/<slug>/` | `organizer-event-detail` | Organizer; Owned, Superadmin bypass | Partial organizer event body | 200 event | 400; 401; 403; 404; 409 ticketed event lock | Update event |
+| DELETE | `/api/organizer/events/<slug>/` | `organizer-event-detail` | Organizer; Owned, Superadmin bypass | None | 204 | 401; 403; 404; 409 ticket history exists | Delete unticketed event |
 
 ## Organizer ticket types
 
@@ -99,12 +101,12 @@ event, and ticket capacity cannot exceed section capacity.
 
 | Method | Path | URL name | Access | Request / query | Success | Main errors | Purpose |
 |---|---|---|---|---|---|---|---|
-| GET | `/api/organizer/events/<event_slug>/ticket-types/` | `organizer-ticket-type-list` | Organizer; event owner, staff bypass | Event slug | 200 ticket type array | 401; 403; 404 ownership/not found | Ticket type inventory |
-| POST | `/api/organizer/events/<event_slug>/ticket-types/` | `organizer-ticket-type-list` | Organizer; event owner, staff bypass | Body: `name`, `price`, `capacity`, `max_per_order`; optional `venue_section_id`, sales window and `is_active` | 201 ticket type | 400 validation; 401; 403; 404 | Create ticket type or section price |
-| GET | `/api/organizer/events/<event_slug>/ticket-types/<id>/` | `organizer-ticket-type-detail` | Organizer; Owned, staff bypass | Slug and integer ID | 200 ticket type | 401; 403; 404 | Ticket type detail |
-| PUT | `/api/organizer/events/<event_slug>/ticket-types/<id>/` | `organizer-ticket-type-detail` | Organizer; Owned, staff bypass | Full ticket type body | 200 ticket type | 400; 401; 403; 404; 409 lifecycle/capacity floor | Replace ticket type |
-| PATCH | `/api/organizer/events/<event_slug>/ticket-types/<id>/` | `organizer-ticket-type-detail` | Organizer; Owned, staff bypass | Partial ticket type body | 200 ticket type | 400; 401; 403; 404; 409 lifecycle/capacity floor | Update ticket type |
-| DELETE | `/api/organizer/events/<event_slug>/ticket-types/<id>/` | `organizer-ticket-type-detail` | Organizer; Owned, staff bypass | None | 204 | 401; 403; 404; 409 sold ticket history | Delete unsold ticket type |
+| GET | `/api/organizer/events/<event_slug>/ticket-types/` | `organizer-ticket-type-list` | Organizer; event owner, Superadmin bypass | Event slug | 200 ticket type array | 401; 403; 404 ownership/not found | Ticket type inventory |
+| POST | `/api/organizer/events/<event_slug>/ticket-types/` | `organizer-ticket-type-list` | Organizer; event owner, Superadmin bypass | Body: `name`, `price`, `capacity`, `max_per_order`; optional `venue_section_id`, sales window and `is_active` | 201 ticket type | 400 validation; 401; 403; 404 | Create ticket type or section price |
+| GET | `/api/organizer/events/<event_slug>/ticket-types/<id>/` | `organizer-ticket-type-detail` | Organizer; Owned, Superadmin bypass | Slug and integer ID | 200 ticket type | 401; 403; 404 | Ticket type detail |
+| PUT | `/api/organizer/events/<event_slug>/ticket-types/<id>/` | `organizer-ticket-type-detail` | Organizer; Owned, Superadmin bypass | Full ticket type body | 200 ticket type | 400; 401; 403; 404; 409 lifecycle/capacity floor | Replace ticket type |
+| PATCH | `/api/organizer/events/<event_slug>/ticket-types/<id>/` | `organizer-ticket-type-detail` | Organizer; Owned, Superadmin bypass | Partial ticket type body | 200 ticket type | 400; 401; 403; 404; 409 lifecycle/capacity floor | Update ticket type |
+| DELETE | `/api/organizer/events/<event_slug>/ticket-types/<id>/` | `organizer-ticket-type-detail` | Organizer; Owned, Superadmin bypass | None | 204 | 401; 403; 404; 409 sold ticket history | Delete unsold ticket type |
 
 ## Orders and checkout
 
@@ -160,13 +162,13 @@ Wallet list and detail responses explicitly include the model's lowercase
 
 ## Organizer check-in
 
-Unlike other organizer CRUD views, this route requires exact event ownership;
-the current code has no staff bypass.
+The route requires exact event ownership for organizers. Superadmins can
+operate on any event.
 
 | Method | Path | URL name | Access | Request / query | Success | Main errors | Purpose |
 |---|---|---|---|---|---|---|---|
-| GET | `/api/organizer/events/<event_slug>/check-ins/` | `organizer-ticket-check-in` | JWT; exact event owner | Event slug | 200 checked-in ticket array | 401; 404 ownership/not found | Event check-in audit list |
-| POST | `/api/organizer/events/<event_slug>/check-ins/` | `organizer-ticket-check-in` | JWT; exact event owner | Body: `qr_code` UUID | 200 `{result: checked_in, ...}` | 400 missing/malformed UUID; 401; 404 event/ticket; 409 invalid or already checked in | Atomic ticket check-in |
+| GET | `/api/organizer/events/<event_slug>/check-ins/` | `organizer-ticket-check-in` | Organizer; exact event owner, Superadmin bypass | Event slug | 200 checked-in ticket array | 401; 404 ownership/not found | Event check-in audit list |
+| POST | `/api/organizer/events/<event_slug>/check-ins/` | `organizer-ticket-check-in` | Organizer; exact event owner, Superadmin bypass | Body: `qr_code` UUID | 200 `{result: checked_in, ...}` | 400 missing/malformed UUID; 401; 404 event/ticket; 409 invalid or already checked in | Atomic ticket check-in |
 
 Duplicate scans return the original timestamp:
 

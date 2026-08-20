@@ -419,18 +419,6 @@ class OrganizerEventSerializer(serializers.ModelSerializer):
                 )
             })
 
-        request = self.context.get("request")
-        if (
-            venue
-            and venue.created_by_id
-            and request
-            and not request.user.is_staff
-            and venue.created_by_id != request.user.id
-        ):
-            raise serializers.ValidationError({
-                "venue_id": "Bu məkanı istifadə etmək icazəniz yoxdur."
-            })
-
         if (
             self.instance
             and venue_plan != self.instance.venue_plan

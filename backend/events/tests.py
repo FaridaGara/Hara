@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.contrib.gis.geos import Point
 from django.test import TestCase
 from django.urls import reverse
@@ -34,12 +35,12 @@ class FavoriteAPITests(APITestCase):
         cls.user = get_user_model().objects.create_user(
             email="favorite-user@hara.today",
             password="StrongPass123!",
-            account_type="attendee",
+            account_type="user",
         )
         cls.other_user = get_user_model().objects.create_user(
             email="favorite-other@hara.today",
             password="StrongPass123!",
-            account_type="attendee",
+            account_type="user",
         )
         cls.category = Category.objects.create(
             name="Favorite Music",
@@ -276,7 +277,7 @@ class PublicEventTicketTypeContractTests(APITestCase):
         cls.buyer = get_user_model().objects.create_user(
             email="public-contract-buyer@hara.today",
             password="StrongPass123!",
-            account_type="attendee",
+            account_type="user",
         )
         cls.category = Category.objects.create(
             name="Public Contract",
@@ -698,7 +699,7 @@ class OrganizerEventAPITests(APITestCase):
         cls.attendee = User.objects.create_user(
             email="attendee@hara.today",
             password="StrongPass123!",
-            account_type="attendee",
+            account_type="user",
         )
 
         cls.category = Category.objects.create(
@@ -938,17 +939,45 @@ class VenuePlanAPITests(APITestCase):
             password="StrongPass123!",
             account_type="organizer",
         )
+        cls.admin = user_model.objects.create_user(
+            email="venue-admin@hara.today",
+            password="StrongPass123!",
+            account_type="admin",
+        )
+        cls.admin_without_permissions = user_model.objects.create_user(
+            email="venue-admin-no-permissions@hara.today",
+            password="StrongPass123!",
+            account_type="admin",
+        )
+        cls.superadmin = user_model.objects.create_superuser(
+            email="venue-superadmin@hara.today",
+            password="StrongPass123!",
+        )
+        cls.admin.user_permissions.add(
+            *Permission.objects.filter(
+                content_type__app_label="events",
+                codename__in={
+                    "add_venue",
+                    "view_venue",
+                    "change_venue",
+                    "delete_venue",
+                    "add_venueplan",
+                    "view_venueplan",
+                    "delete_venueplan",
+                },
+            )
+        )
         cls.category = Category.objects.create(
             name="Venue plan music",
             slug="venue-plan-music",
         )
 
     def setUp(self):
-        self.client.force_authenticate(user=self.organizer)
+        self.client.force_authenticate(user=self.admin)
 
     def create_venue_with_plan(self):
         return self.client.post(
-            reverse("organizer-venue-list"),
+            reverse("admin-venue-list"),
             {
                 "name": "Planlı Konsert Zalı",
                 "city": "Bakı",
@@ -1012,12 +1041,12 @@ class VenuePlanAPITests(APITestCase):
             format="json",
         )
 
-    def test_organizer_creates_venue_with_versioned_plan(self):
+    def test_permitted_admin_creates_venue_with_versioned_plan(self):
         response = self.create_venue_with_plan()
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         venue = Venue.objects.get(pk=response.json()["id"])
-        self.assertEqual(venue.created_by, self.organizer)
+        self.assertEqual(venue.created_by, self.admin)
 
         plan = venue.plans.get()
         self.assertEqual(plan.version, 1)
@@ -1034,7 +1063,7 @@ class VenuePlanAPITests(APITestCase):
 
         next_plan = self.client.post(
             reverse(
-                "organizer-venue-plan-list",
+                "admin-venue-plan-list",
                 kwargs={"venue_id": venue_id},
             ),
             {
@@ -1048,16 +1077,58 @@ class VenuePlanAPITests(APITestCase):
         self.assertEqual(next_plan.status_code, status.HTTP_201_CREATED)
         self.assertEqual(next_plan.json()["version"], 2)
 
-    def test_other_organizer_cannot_open_owned_venue(self):
+    def test_organizer_cannot_manage_venues(self):
         response = self.create_venue_with_plan()
         venue_id = response.json()["id"]
         self.client.force_authenticate(user=self.other_organizer)
 
-        hidden = self.client.get(
-            reverse("organizer-venue-detail", kwargs={"id": venue_id})
+        forbidden = self.client.get(
+            reverse("admin-venue-detail", kwargs={"id": venue_id})
         )
 
-        self.assertEqual(hidden.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(forbidden.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_admin_without_model_permission_cannot_manage_venues(self):
+        self.client.force_authenticate(user=self.admin_without_permissions)
+
+        response = self.client.get(reverse("admin-venue-list"))
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_superadmin_bypasses_individual_model_permissions(self):
+        self.client.force_authenticate(user=self.superadmin)
+
+        response = self.create_venue_with_plan()
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_organizer_can_create_event_in_admin_managed_venue(self):
+        venue_response = self.create_venue_with_plan()
+        venue = Venue.objects.get(pk=venue_response.json()["id"])
+        plan = venue.plans.get()
+        start_at = timezone.now() + timedelta(days=20)
+        self.client.force_authenticate(user=self.organizer)
+
+        response = self.client.post(
+            reverse("organizer-event-list"),
+            {
+                "title": "Admin məkanında organizer tədbiri",
+                "description": "Məkan kataloqu ortaq istifadə olunur",
+                "category_id": self.category.pk,
+                "venue_id": venue.pk,
+                "venue_plan_id": plan.pk,
+                "start_at": start_at.isoformat(),
+                "end_at": (start_at + timedelta(hours=2)).isoformat(),
+                "status": Event.Status.DRAFT,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        event = Event.objects.get(pk=response.json()["id"])
+        self.assertEqual(event.organizer, self.organizer)
+        self.assertEqual(event.venue, venue)
+        self.assertEqual(event.venue_plan, plan)
 
     def test_public_seating_plan_contains_zones_seats_and_prices(self):
         response = self.create_venue_with_plan()

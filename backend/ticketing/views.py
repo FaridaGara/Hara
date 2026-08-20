@@ -208,7 +208,7 @@ class OrganizerTicketTypeListCreateAPIView(
     def get_event(self):
         queryset = Event.objects.all()
 
-        if not self.request.user.is_staff:
+        if not self.request.user.is_superuser:
             queryset = queryset.filter(
                 organizer=self.request.user
             )
@@ -287,7 +287,7 @@ class OrganizerTicketTypeDetailAPIView(
             event__slug=self.kwargs["event_slug"],
         )
 
-        if self.request.user.is_staff:
+        if self.request.user.is_superuser:
             return queryset
 
         return queryset.filter(
@@ -671,8 +671,13 @@ class OrganizerTicketCheckInAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get_event(self):
+        queryset = Event.objects.all()
+
+        if not self.request.user.is_superuser:
+            queryset = queryset.filter(organizer=self.request.user)
+
         return get_object_or_404(
-            Event.objects.filter(organizer=self.request.user),
+            queryset,
             slug=self.kwargs["event_slug"],
         )
 

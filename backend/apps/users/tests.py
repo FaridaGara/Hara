@@ -1,12 +1,14 @@
 from unittest.mock import patch
 
+from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.test import TestCase
+from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
+from .admin import HaraUserAdmin
 from .models import SocialIdentity
 from .social_auth import SocialClaims, SocialTokenError
 
@@ -15,24 +17,25 @@ User = get_user_model()
 
 
 class UserManagerTests(TestCase):
-    def test_create_attendee_user_with_email_and_password(self):
+    def test_create_user_with_email_and_password(self):
         user = User.objects.create_user(
-            email="attendee@example.com",
+            email="user@example.com",
             password="test-password-123",
         )
 
-        self.assertEqual(user.email, "attendee@example.com")
+        self.assertEqual(user.email, "user@example.com")
         self.assertTrue(user.check_password("test-password-123"))
         self.assertFalse(user.is_staff)
         self.assertFalse(user.is_superuser)
 
-    def test_default_account_type_is_attendee(self):
+    def test_default_account_type_is_user(self):
         user = User.objects.create_user(
             email="default@example.com",
             password="test-password-123",
         )
 
-        self.assertEqual(user.account_type, User.AccountType.ATTENDEE)
+        self.assertEqual(user.account_type, User.AccountType.USER)
+        self.assertEqual(user.role, "user")
 
     def test_create_organizer_user(self):
         user = User.objects.create_user(
@@ -42,6 +45,20 @@ class UserManagerTests(TestCase):
         )
 
         self.assertEqual(user.account_type, User.AccountType.ORGANIZER)
+        self.assertFalse(user.is_staff)
+        self.assertEqual(user.role, "organizer")
+
+    def test_create_admin_user_enables_staff_with_scoped_permissions(self):
+        user = User.objects.create_user(
+            email="venue-admin@example.com",
+            password="test-password-123",
+            account_type=User.AccountType.ADMIN,
+        )
+
+        self.assertEqual(user.account_type, User.AccountType.ADMIN)
+        self.assertTrue(user.is_staff)
+        self.assertFalse(user.is_superuser)
+        self.assertEqual(user.role, "admin")
 
     def test_email_is_normalized(self):
         user = User.objects.create_user(
@@ -81,7 +98,8 @@ class UserManagerTests(TestCase):
 
         self.assertTrue(user.is_staff)
         self.assertTrue(user.is_superuser)
-        self.assertEqual(user.account_type, User.AccountType.ATTENDEE)
+        self.assertEqual(user.account_type, User.AccountType.ADMIN)
+        self.assertEqual(user.role, "superadmin")
 
     def test_invalid_superuser_flags_raise_errors(self):
         invalid_fields = (
@@ -104,6 +122,37 @@ class UserManagerTests(TestCase):
                 email="not-an-email",
                 password="test-password-123",
             )
+
+
+class UserAdminPermissionTests(TestCase):
+    def setUp(self):
+        self.model_admin = HaraUserAdmin(User, admin.site)
+        self.request = RequestFactory().get("/admin/users/user/")
+
+    def test_regular_admin_cannot_manage_users_or_roles(self):
+        self.request.user = User.objects.create_user(
+            email="scoped-admin@example.com",
+            password="test-password-123",
+            account_type=User.AccountType.ADMIN,
+        )
+
+        self.assertFalse(self.model_admin.has_module_permission(self.request))
+        self.assertFalse(self.model_admin.has_view_permission(self.request))
+        self.assertFalse(self.model_admin.has_add_permission(self.request))
+        self.assertFalse(self.model_admin.has_change_permission(self.request))
+        self.assertFalse(self.model_admin.has_delete_permission(self.request))
+
+    def test_superadmin_can_manage_users_and_roles(self):
+        self.request.user = User.objects.create_superuser(
+            email="root-admin@example.com",
+            password="test-password-123",
+        )
+
+        self.assertTrue(self.model_admin.has_module_permission(self.request))
+        self.assertTrue(self.model_admin.has_view_permission(self.request))
+        self.assertTrue(self.model_admin.has_add_permission(self.request))
+        self.assertTrue(self.model_admin.has_change_permission(self.request))
+        self.assertTrue(self.model_admin.has_delete_permission(self.request))
 
 
 class SocialLoginTests(APITestCase):
@@ -191,6 +240,8 @@ class SocialLoginTests(APITestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["display_name"], "New Name")
+        self.assertEqual(response.data["account_type"], "user")
+        self.assertEqual(response.data["role"], "user")
         user.refresh_from_db()
         self.assertEqual(user.phone_number, "+994501112233")
         self.assertEqual(str(user.birth_date), "1996-11-12")
