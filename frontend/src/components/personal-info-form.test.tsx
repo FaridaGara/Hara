@@ -20,6 +20,7 @@ const user: UserProfile = {
   account_type: "user",
   role: "user",
   providers: ["google"],
+  is_email_verified: true,
 };
 
 vi.mock("next/navigation", () => ({

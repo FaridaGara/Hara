@@ -22,13 +22,19 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
 )
 from rest_framework_simplejwt.views import (
-    TokenObtainPairView,
     TokenRefreshView,
 )
 from apps.users.views import (
     AppleSocialLoginAPIView,
+    CredentialsLoginAPIView,
+    EmailVerificationAPIView,
     GoogleSocialLoginAPIView,
+    PasswordResetConfirmAPIView,
+    PasswordResetRequestAPIView,
+    PasswordResetVerifyAPIView,
+    RegistrationAPIView,
     UserProfileAPIView,
+    VerificationResendAPIView,
 )
 from events.views import (
     AdminVenueDetailAPIView,
@@ -87,8 +93,38 @@ urlpatterns = [
     ),
     path(
         "api/auth/login/",
-        TokenObtainPairView.as_view(),
+        CredentialsLoginAPIView.as_view(),
         name="auth-login",
+    ),
+    path(
+        "api/auth/register/",
+        RegistrationAPIView.as_view(),
+        name="auth-register",
+    ),
+    path(
+        "api/auth/verify-email/",
+        EmailVerificationAPIView.as_view(),
+        name="auth-verify-email",
+    ),
+    path(
+        "api/auth/verification/resend/",
+        VerificationResendAPIView.as_view(),
+        name="auth-verification-resend",
+    ),
+    path(
+        "api/auth/password-reset/request/",
+        PasswordResetRequestAPIView.as_view(),
+        name="auth-password-reset-request",
+    ),
+    path(
+        "api/auth/password-reset/verify/",
+        PasswordResetVerifyAPIView.as_view(),
+        name="auth-password-reset-verify",
+    ),
+    path(
+        "api/auth/password-reset/confirm/",
+        PasswordResetConfirmAPIView.as_view(),
+        name="auth-password-reset-confirm",
     ),
     path(
         "api/auth/refresh/",

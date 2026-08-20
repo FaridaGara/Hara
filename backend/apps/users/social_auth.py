@@ -23,7 +23,7 @@ class SocialClaims:
     authoritative_email: bool = False
 
 
-def verify_google_token(token):
+def verify_google_token(token, *, nonce=""):
     if not settings.GOOGLE_OAUTH_CLIENT_IDS:
         raise SocialTokenError("Google login is not configured.")
 
@@ -56,9 +56,11 @@ def verify_google_token(token):
     )
 
 
-def verify_apple_token(token):
+def verify_apple_token(token, *, nonce=""):
     if not settings.APPLE_OAUTH_CLIENT_IDS:
         raise SocialTokenError("Apple login is not configured.")
+    if not nonce:
+        raise SocialTokenError("Apple login nonce is missing.")
 
     try:
         signing_key = jwt.PyJWKClient(
@@ -81,6 +83,8 @@ def verify_apple_token(token):
     verified = claims.get("email_verified") in (True, "true")
     if not subject or not email or not verified:
         raise SocialTokenError("Apple account email is not verified.")
+    if claims.get("nonce") != nonce:
+        raise SocialTokenError("Apple identity token nonce is invalid.")
 
     return SocialClaims(
         subject=subject,

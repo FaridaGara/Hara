@@ -73,10 +73,34 @@ export type UserProfile = {
   account_type: "user" | "organizer" | "admin";
   role: UserRole;
   providers: SocialProvider[];
+  is_email_verified: boolean;
 };
 
 export type AuthSessionResponse = AuthTokenPair & {
   user: UserProfile;
+};
+
+export type RegistrationRequest = {
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone_number: string;
+  password: string;
+  password_confirm: string;
+  accept_terms: boolean;
+};
+
+export type VerificationPurpose = "registration" | "password_reset";
+
+export type AuthDeliveryResponse = {
+  detail: string;
+  email?: string;
+  expires_at?: string;
+  retry_after?: number;
+};
+
+export type PasswordResetTokenResponse = {
+  reset_token: string;
 };
 
 export type UserProfileUpdate = Pick<

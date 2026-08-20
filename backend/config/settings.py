@@ -226,6 +226,25 @@ ORDER_RESERVATION_MINUTES = int(
 GOOGLE_OAUTH_CLIENT_IDS = get_env_list("GOOGLE_OAUTH_CLIENT_IDS")
 APPLE_OAUTH_CLIENT_IDS = get_env_list("APPLE_OAUTH_CLIENT_IDS")
 
+EMAIL_BACKEND = os.getenv(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.console.EmailBackend",
+)
+EMAIL_HOST = os.getenv("EMAIL_HOST", "")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "true").lower() == "true"
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "HARA <no-reply@hara.today>")
+
+AUTH_CODE_LIFETIME_SECONDS = int(
+    os.getenv("AUTH_CODE_LIFETIME_SECONDS", "600")
+)
+AUTH_CODE_RESEND_COOLDOWN_SECONDS = int(
+    os.getenv("AUTH_CODE_RESEND_COOLDOWN_SECONDS", "60")
+)
+AUTH_CODE_MAX_ATTEMPTS = int(os.getenv("AUTH_CODE_MAX_ATTEMPTS", "5"))
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",

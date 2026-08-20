@@ -15,6 +15,22 @@ const navigation = vi.hoisted(() => ({
   searchParams: new URLSearchParams(),
 }));
 
+const profile = {
+  id: 7,
+  email: "aysel@example.com",
+  display_name: "Aysel Məmmədova",
+  first_name: "Aysel",
+  last_name: "Məmmədova",
+  phone_number: "+994501112233",
+  avatar_url: "",
+  birth_date: null,
+  interests: [],
+  account_type: "user" as const,
+  role: "user" as const,
+  providers: [],
+  is_email_verified: true,
+};
+
 vi.mock("next/navigation", () => ({
   useRouter: () => navigation,
   usePathname: () => navigation.pathname,
@@ -36,7 +52,7 @@ function renderLogin() {
 
 async function fillLogin() {
   const user = userEvent.setup();
-  await user.type(screen.getByLabelText("Email"), "aysel@example.com");
+  await user.type(screen.getByLabelText("E-poçt və ya telefon"), "aysel@example.com");
   await user.type(screen.getByLabelText("Şifrə"), "secret");
   await user.click(screen.getByRole("button", { name: "Daxil ol" }));
   return user;
@@ -48,6 +64,7 @@ describe("login", () => {
     vi.spyOn(authApi, "login").mockResolvedValue({
       access: "access",
       refresh: "refresh",
+      user: profile,
     });
     renderLogin();
 
@@ -67,7 +84,7 @@ describe("login", () => {
     await fillLogin();
 
     expect((await screen.findByRole("alert")).textContent).toContain(
-      "Email və ya şifrə yanlışdır",
+      "E-poçt, telefon və ya şifrə yanlışdır",
     );
   });
 
@@ -76,6 +93,7 @@ describe("login", () => {
     vi.spyOn(authApi, "login").mockResolvedValue({
       access: "access",
       refresh: "refresh",
+      user: profile,
     });
     renderLogin();
 

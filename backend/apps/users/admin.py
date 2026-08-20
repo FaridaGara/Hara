@@ -19,10 +19,16 @@ class HaraUserAdmin(UserAdmin):
         "email",
         "display_name",
         "account_type",
+        "is_email_verified",
         "is_staff",
         "is_active",
     )
-    list_filter = ("account_type", "is_staff", "is_active")
+    list_filter = (
+        "account_type",
+        "is_email_verified",
+        "is_staff",
+        "is_active",
+    )
     search_fields = (
         "email",
         "display_name",
@@ -43,6 +49,7 @@ class HaraUserAdmin(UserAdmin):
                     "last_name",
                     "phone_number",
                     "avatar_url",
+                    "is_email_verified",
                 )
             },
         ),
@@ -72,6 +79,7 @@ class HaraUserAdmin(UserAdmin):
                     "account_type",
                     "display_name",
                     "phone_number",
+                    "is_email_verified",
                     "is_staff",
                     "is_active",
                 ),

@@ -1,3 +1,5 @@
+import uuid
+
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.core.validators import validate_email
 from django.db import models
@@ -61,6 +63,7 @@ class User(AbstractUser):
     avatar_url = models.URLField(blank=True)
     birth_date = models.DateField(null=True, blank=True)
     interests = models.JSONField(default=list, blank=True)
+    is_email_verified = models.BooleanField(default=False)
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []
@@ -121,3 +124,35 @@ class SocialIdentity(models.Model):
 
     def __str__(self):
         return f"{self.provider}:{self.subject}"
+
+
+class VerificationCode(models.Model):
+    class Purpose(models.TextChoices):
+        REGISTRATION = "registration", "Registration"
+        PASSWORD_RESET = "password_reset", "Password reset"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="verification_codes",
+    )
+    purpose = models.CharField(max_length=24, choices=Purpose.choices)
+    code_hash = models.CharField(max_length=128)
+    expires_at = models.DateTimeField()
+    attempts = models.PositiveSmallIntegerField(default=0)
+    verified_at = models.DateTimeField(null=True, blank=True)
+    consumed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(
+                fields=("user", "purpose", "consumed_at"),
+                name="users_code_lookup_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.user_id}:{self.purpose}:{self.created_at.isoformat()}"
