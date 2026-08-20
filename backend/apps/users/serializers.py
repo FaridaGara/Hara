@@ -5,6 +5,7 @@ from .models import User
 
 class UserProfileSerializer(serializers.ModelSerializer):
     providers = serializers.SerializerMethodField()
+    role = serializers.CharField(read_only=True)
 
     class Meta:
         model = User
@@ -19,9 +20,16 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "birth_date",
             "interests",
             "account_type",
+            "role",
             "providers",
         )
-        read_only_fields = ("id", "email", "account_type", "providers")
+        read_only_fields = (
+            "id",
+            "email",
+            "account_type",
+            "role",
+            "providers",
+        )
 
     def get_providers(self, obj):
         return list(

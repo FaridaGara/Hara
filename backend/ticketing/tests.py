@@ -63,7 +63,7 @@ class OrganizerTicketTypeAPITests(APITestCase):
         cls.attendee = User.objects.create_user(
             email="ticket-buyer@hara.today",
             password="StrongPass123!",
-            account_type="attendee",
+            account_type="user",
         )
 
         cls.category = Category.objects.create(
@@ -369,7 +369,7 @@ class OrderCreateAPITests(APITestCase):
         cls.buyer = User.objects.create_user(
             email="checkout-buyer@hara.today",
             password="StrongPass123!",
-            account_type="attendee",
+            account_type="user",
         )
 
         cls.category = Category.objects.create(
@@ -807,12 +807,12 @@ class OrderLifecycleAPITests(APITestCase):
         cls.buyer = User.objects.create_user(
             email="lifecycle-buyer@hara.today",
             password="StrongPass123!",
-            account_type="attendee",
+            account_type="user",
         )
         cls.other_buyer = User.objects.create_user(
             email="lifecycle-other-buyer@hara.today",
             password="StrongPass123!",
-            account_type="attendee",
+            account_type="user",
         )
 
         cls.category = Category.objects.create(
@@ -1177,12 +1177,12 @@ class SandboxPaymentAPITests(APITestCase):
         cls.buyer = User.objects.create_user(
             email="payment-buyer@hara.today",
             password="StrongPass123!",
-            account_type="attendee",
+            account_type="user",
         )
         cls.other_buyer = User.objects.create_user(
             email="payment-other-buyer@hara.today",
             password="StrongPass123!",
-            account_type="attendee",
+            account_type="user",
         )
         cls.category = Category.objects.create(
             name="Sandbox Payment Test",
@@ -2146,17 +2146,21 @@ class TicketAndCheckInAPITests(APITestCase):
             account_type="organizer",
             display_name="Başqa Organizer",
         )
+        cls.superadmin = User.objects.create_superuser(
+            email="checkin-superadmin@hara.today",
+            password="StrongPass123!",
+        )
         cls.buyer = User.objects.create_user(
             email="ticket-api-buyer@hara.today",
             password="StrongPass123!",
-            account_type="attendee",
+            account_type="user",
             display_name="Bilet Sahibi",
             phone_number="+994502222222",
         )
         cls.other_buyer = User.objects.create_user(
             email="ticket-api-other@hara.today",
             password="StrongPass123!",
-            account_type="attendee",
+            account_type="user",
             display_name="Başqa Alıcı",
         )
         cls.category = Category.objects.create(
@@ -2584,6 +2588,22 @@ class TicketAndCheckInAPITests(APITestCase):
         self.upcoming_ticket.refresh_from_db()
         self.assertIsNone(self.upcoming_ticket.used_at)
 
+    def test_superadmin_can_check_in_ticket_for_any_event(self):
+        self.client.force_authenticate(user=self.superadmin)
+
+        response = self.client.post(
+            self.check_in_url(self.upcoming_event),
+            {"qr_code": str(self.upcoming_ticket.qr_code)},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.upcoming_ticket.refresh_from_db()
+        self.assertEqual(
+            self.upcoming_ticket.checked_in_by,
+            self.superadmin,
+        )
+
     def test_empty_and_malformed_qr_codes_return_400(self):
         self.client.force_authenticate(user=self.organizer)
 
@@ -2799,7 +2819,7 @@ class TicketCheckInConcurrencyTests(TransactionTestCase):
         self.buyer = User.objects.create_user(
             email="concurrency-buyer@hara.today",
             password="StrongPass123!",
-            account_type="attendee",
+            account_type="user",
             display_name="Concurrency Buyer",
         )
         category = Category.objects.create(
@@ -2902,13 +2922,13 @@ class InventoryReservationAndExpirationTests(APITestCase):
         cls.buyer = User.objects.create_user(
             email="inventory-buyer@hara.today",
             password="StrongPass123!",
-            account_type="attendee",
+            account_type="user",
             display_name="Inventory Buyer",
         )
         cls.other_buyer = User.objects.create_user(
             email="inventory-other@hara.today",
             password="StrongPass123!",
-            account_type="attendee",
+            account_type="user",
             display_name="Other Inventory Buyer",
         )
         cls.category = Category.objects.create(
@@ -3476,12 +3496,12 @@ class InventoryConcurrencyTests(TransactionTestCase):
         self.first_buyer = User.objects.create_user(
             email="last-seat-first@hara.today",
             password="StrongPass123!",
-            account_type="attendee",
+            account_type="user",
         )
         self.second_buyer = User.objects.create_user(
             email="last-seat-second@hara.today",
             password="StrongPass123!",
-            account_type="attendee",
+            account_type="user",
         )
         category = Category.objects.create(
             name="Last Seat",

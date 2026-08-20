@@ -17,7 +17,8 @@ const user: UserProfile = {
   avatar_url: "",
   birth_date: "1996-11-12",
   interests: ["Musiqi", "Səyahət", "Festival", "Texnologiya", "Rəqs", "İncəsənət"],
-  account_type: "attendee",
+  account_type: "user",
+  role: "user",
   providers: ["google"],
 };
 

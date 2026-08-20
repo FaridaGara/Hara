@@ -31,14 +31,14 @@ from apps.users.views import (
     UserProfileAPIView,
 )
 from events.views import (
+    AdminVenueDetailAPIView,
+    AdminVenueListCreateAPIView,
+    AdminVenuePlanDetailAPIView,
+    AdminVenuePlanListCreateAPIView,
     FavoriteDetailAPIView,
     FavoriteListCreateAPIView,
     OrganizerEventDetailAPIView,
     OrganizerEventListCreateAPIView,
-    OrganizerVenueDetailAPIView,
-    OrganizerVenueListCreateAPIView,
-    OrganizerVenuePlanDetailAPIView,
-    OrganizerVenuePlanListCreateAPIView,
 )
 from ticketing.views import (
     OrderCancelAPIView,
@@ -121,24 +121,24 @@ urlpatterns = [
         name="organizer-event-detail",
     ),
     path(
-        "api/organizer/venues/",
-        OrganizerVenueListCreateAPIView.as_view(),
-        name="organizer-venue-list",
+        "api/admin/venues/",
+        AdminVenueListCreateAPIView.as_view(),
+        name="admin-venue-list",
     ),
     path(
-        "api/organizer/venues/<uuid:id>/",
-        OrganizerVenueDetailAPIView.as_view(),
-        name="organizer-venue-detail",
+        "api/admin/venues/<uuid:id>/",
+        AdminVenueDetailAPIView.as_view(),
+        name="admin-venue-detail",
     ),
     path(
-        "api/organizer/venues/<uuid:venue_id>/plans/",
-        OrganizerVenuePlanListCreateAPIView.as_view(),
-        name="organizer-venue-plan-list",
+        "api/admin/venues/<uuid:venue_id>/plans/",
+        AdminVenuePlanListCreateAPIView.as_view(),
+        name="admin-venue-plan-list",
     ),
     path(
-        "api/organizer/venues/<uuid:venue_id>/plans/<uuid:pk>/",
-        OrganizerVenuePlanDetailAPIView.as_view(),
-        name="organizer-venue-plan-detail",
+        "api/admin/venues/<uuid:venue_id>/plans/<uuid:pk>/",
+        AdminVenuePlanDetailAPIView.as_view(),
+        name="admin-venue-plan-detail",
     ),
     path(
         "api/organizer/events/<slug:event_slug>/ticket-types/",

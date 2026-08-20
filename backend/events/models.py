@@ -4,6 +4,8 @@ from django.conf import settings
 from django.contrib.gis.db import models
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, RegexValidator
+from django.db import transaction
+from django.db.models import Max
 from django.utils.text import slugify
 
 
@@ -60,7 +62,7 @@ class VenuePlan(models.Model):
         related_name="plans",
     )
     name = models.CharField(max_length=160)
-    version = models.PositiveSmallIntegerField()
+    version = models.PositiveSmallIntegerField(editable=False)
     background_image_url = models.URLField(blank=True)
     canvas_width = models.PositiveIntegerField(
         default=1200,
@@ -98,6 +100,20 @@ class VenuePlan(models.Model):
             raise ValidationError({
                 "is_default": "Yalnız yayımlanmış plan əsas plan ola bilər."
             })
+
+    def save(self, *args, **kwargs):
+        if self._state.adding and not self.version:
+            with transaction.atomic():
+                Venue.objects.select_for_update().get(pk=self.venue_id)
+                self.version = (
+                    VenuePlan.objects
+                    .filter(venue_id=self.venue_id)
+                    .aggregate(max_version=Max("version"))["max_version"]
+                    or 0
+                ) + 1
+                return super().save(*args, **kwargs)
+
+        return super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.venue.name} — {self.name} v{self.version}"
