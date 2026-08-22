@@ -43,6 +43,8 @@ from events.views import (
     AdminVenuePlanListCreateAPIView,
     FavoriteDetailAPIView,
     FavoriteListCreateAPIView,
+    NotificationListAPIView,
+    OrganizerFollowAPIView,
     OrganizerEventDetailAPIView,
     OrganizerEventListCreateAPIView,
 )
@@ -90,6 +92,16 @@ urlpatterns = [
         "api/favorites/<uuid:event_id>/",
         FavoriteDetailAPIView.as_view(),
         name="favorite-detail",
+    ),
+    path(
+        "api/organizers/<int:organizer_id>/follow/",
+        OrganizerFollowAPIView.as_view(),
+        name="organizer-follow",
+    ),
+    path(
+        "api/notifications/",
+        NotificationListAPIView.as_view(),
+        name="notification-list",
     ),
     path(
         "api/auth/login/",

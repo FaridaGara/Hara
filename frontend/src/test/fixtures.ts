@@ -19,6 +19,15 @@ export const eventFixture: HaraEventDetail = {
   end_at: "2026-08-10T20:00:00Z",
   status: "published",
   is_featured: true,
+  photos: [],
+  organizer: {
+    id: 7,
+    name: "Etud",
+    avatar_url: "",
+    event_count: 24,
+    follower_count: 1200,
+    is_followed: false,
+  },
   ticket_types: [
     {
       id: 12,

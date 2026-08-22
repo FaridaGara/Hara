@@ -28,6 +28,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     "/forgot-password",
     "/reset-password",
   ].some((route) => pathname === route || pathname.startsWith(`${route}/`));
+  const usesImmersiveShell = pathname.startsWith("/events/");
 
   const handleLogout = () => {
     logout();
@@ -40,7 +41,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className={shellClassName}>
-      {!usesDiscoveryShell && !usesAuthShell ? <header className="sticky top-0 z-30 border-b border-white/[0.08] bg-[#111118]/95 backdrop-blur-xl">
+      {!usesDiscoveryShell && !usesAuthShell && !usesImmersiveShell ? <header className="sticky top-0 z-30 border-b border-white/[0.08] bg-[#111118]/95 backdrop-blur-xl">
         <div className="mx-auto flex min-h-16 max-w-5xl items-center justify-between gap-3 px-4 sm:px-6">
           <Link
             href="/"

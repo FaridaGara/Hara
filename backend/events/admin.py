@@ -4,7 +4,10 @@ from django.contrib.gis.admin import GISModelAdmin
 from .models import (
     Category,
     Event,
+    EventPhoto,
     Favorite,
+    Notification,
+    OrganizerFollow,
     Venue,
     VenuePlan,
     VenueSeat,
@@ -118,6 +121,14 @@ class EventAdmin(admin.ModelAdmin):
     date_hierarchy = "start_at"
 
 
+@admin.register(EventPhoto)
+class EventPhotoAdmin(admin.ModelAdmin):
+    list_display = ("event", "sort_order", "image_url", "created_at")
+    search_fields = ("event__title", "image_url")
+    autocomplete_fields = ("event",)
+    readonly_fields = ("created_at",)
+
+
 @admin.register(Favorite)
 class FavoriteAdmin(admin.ModelAdmin):
     list_display = ("user", "event", "created_at")
@@ -125,3 +136,20 @@ class FavoriteAdmin(admin.ModelAdmin):
     autocomplete_fields = ("user", "event")
     readonly_fields = ("created_at",)
     date_hierarchy = "created_at"
+
+
+@admin.register(OrganizerFollow)
+class OrganizerFollowAdmin(admin.ModelAdmin):
+    list_display = ("user", "organizer", "created_at")
+    search_fields = ("user__email", "organizer__email")
+    autocomplete_fields = ("user", "organizer")
+    readonly_fields = ("created_at",)
+
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = ("user", "type", "title", "event", "read_at", "created_at")
+    list_filter = ("type", "read_at")
+    search_fields = ("user__email", "title", "body", "event__title")
+    autocomplete_fields = ("user", "event", "organizer")
+    readonly_fields = ("created_at",)

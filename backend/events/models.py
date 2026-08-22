@@ -6,6 +6,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, RegexValidator
 from django.db import transaction
 from django.db.models import Max
+from django.utils import timezone
 from django.utils.text import slugify
 
 
@@ -301,6 +302,24 @@ class Event(models.Model):
             })
 
     def save(self, *args, **kwargs):
+        was_published = False
+        if self.pk:
+            previous_status = (
+                Event.objects
+                .filter(pk=self.pk)
+                .values_list("status", flat=True)
+                .first()
+            )
+            was_published = (
+                previous_status != self.Status.PUBLISHED
+                and self.status == self.Status.PUBLISHED
+            )
+        else:
+            was_published = self.status == self.Status.PUBLISHED
+
+        if was_published and not self.published_at:
+            self.published_at = timezone.now()
+
         if not self.slug:
             base_slug = slugify(self.title)[:220] or str(self.id)
             candidate = base_slug
@@ -314,8 +333,50 @@ class Event(models.Model):
 
         super().save(*args, **kwargs)
 
+        if was_published:
+            transaction.on_commit(lambda: Notification.create_event_published(self))
+
     def __str__(self):
         return self.title
+
+
+class EventPhoto(models.Model):
+    event = models.ForeignKey(
+        Event,
+        on_delete=models.CASCADE,
+        related_name="photos",
+    )
+    image_url = models.URLField()
+    sort_order = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["sort_order", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("event", "sort_order"),
+                name="unique_event_photo_sort_order",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.event} photo {self.sort_order}"
+
+    def clean(self):
+        if (
+            self.event_id
+            and EventPhoto.objects.filter(event_id=self.event_id)
+            .exclude(pk=self.pk)
+            .count()
+            >= 4
+        ):
+            raise ValidationError({
+                "event": "Bir tədbir üçün maksimum 4 foto əlavə edilə bilər."
+            })
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
 
 
 class Favorite(models.Model):
@@ -342,3 +403,106 @@ class Favorite(models.Model):
 
     def __str__(self):
         return f"{self.user} — {self.event}"
+
+
+class OrganizerFollow(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="organizer_follows",
+    )
+    organizer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="followers",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("user", "organizer"),
+                name="unique_user_organizer_follow",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(user=models.F("organizer")),
+                name="user_cannot_follow_self",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.user} follows {self.organizer}"
+
+
+class Notification(models.Model):
+    class Type(models.TextChoices):
+        ORGANIZER_EVENT_PUBLISHED = (
+            "organizer_event_published",
+            "Organizer event published",
+        )
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="notifications",
+    )
+    type = models.CharField(max_length=64, choices=Type.choices)
+    title = models.CharField(max_length=180)
+    body = models.CharField(max_length=280)
+    event = models.ForeignKey(
+        Event,
+        on_delete=models.CASCADE,
+        related_name="notifications",
+        null=True,
+        blank=True,
+    )
+    organizer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="sent_event_notifications",
+        null=True,
+        blank=True,
+    )
+    read_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=("user", "read_at", "-created_at")),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("user", "event", "type"),
+                name="unique_event_publish_notification_per_user",
+            ),
+        ]
+
+    @classmethod
+    def create_event_published(cls, event):
+        follows = OrganizerFollow.objects.filter(
+            organizer=event.organizer,
+        ).select_related("user")
+        organizer_name = (
+            event.organizer.display_name
+            or event.organizer.get_full_name()
+            or event.organizer.email
+        )
+        cls.objects.bulk_create(
+            [
+                cls(
+                    user=follow.user,
+                    type=cls.Type.ORGANIZER_EVENT_PUBLISHED,
+                    title=f"{organizer_name} yeni tədbir elan etdi",
+                    body=event.title,
+                    event=event,
+                    organizer=event.organizer,
+                )
+                for follow in follows
+            ],
+            ignore_conflicts=True,
+        )
+
+    def __str__(self):
+        return f"{self.user} — {self.title}"

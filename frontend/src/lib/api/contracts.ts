@@ -27,6 +27,21 @@ export type HaraEvent = {
   is_featured: boolean;
 };
 
+export type EventPhoto = {
+  id: number;
+  image_url: string;
+  sort_order: number;
+};
+
+export type EventOrganizer = {
+  id: number;
+  name: string;
+  avatar_url: string;
+  event_count: number;
+  follower_count: number;
+  is_followed: boolean;
+};
+
 export type TicketSalesStatus =
   | "UPCOMING"
   | "AVAILABLE"
@@ -49,6 +64,13 @@ export type PublicTicketType = {
 
 export type HaraEventDetail = HaraEvent & {
   ticket_types: PublicTicketType[];
+  photos: EventPhoto[];
+  organizer: EventOrganizer;
+};
+
+export type OrganizerFollowResponse = {
+  organizer_id: number;
+  is_followed: boolean;
 };
 
 export type AuthTokenPair = {

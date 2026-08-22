@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import type { CSSProperties } from "react";
 import { useEffect, useRef, useState } from "react";
 
 import {
@@ -19,7 +20,6 @@ import {
 import { loginHref } from "@/lib/routes";
 
 import { useAuth } from "./auth-provider";
-import { EventPoster } from "./event-poster";
 import { InlineError, PageLoader, StatePanel } from "./states";
 
 type EventDetailState =
@@ -73,114 +73,142 @@ const salesLabels = {
 } as const;
 
 const fallbackPosterColor = "#171720";
+const lightPosterFallbackColor = "#ffe7cd";
 
-function parseHexColor(color: string): [number, number, number] | null {
-  const match = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color.trim());
-  if (!match) return null;
+type PosterTone = {
+  background: string;
+  isLight: boolean;
+};
 
-  const normalized =
-    match[1].length === 3
-      ? match[1]
-          .split("")
-          .map((symbol) => symbol.repeat(2))
-          .join("")
-      : match[1];
-
-  const value = Number.parseInt(normalized, 16);
-  return [(value >> 16) & 0xff, (value >> 8) & 0xff, value & 0xff];
+function toHex(value: number) {
+  return Math.max(0, Math.min(255, value)).toString(16).padStart(2, "0");
 }
 
-function toHex(rgb: readonly [number, number, number]) {
-  return `#${rgb
-    .map((value) => value.toString(16).padStart(2, "0"))
-    .join("")}`;
+function darkenPosterColor(red: number, green: number, blue: number) {
+  const strongest = Math.max(red, green, blue);
+  const boost = strongest < 72 ? 1.55 : 1.08;
+  const shade = 0.62;
+
+  return `#${toHex(Math.round(red * boost * shade))}${toHex(
+    Math.round(green * boost * shade),
+  )}${toHex(Math.round(blue * boost * shade))}`;
 }
 
-function withAlpha(color: string, alpha: number) {
-  const rgb = parseHexColor(color);
-  if (!rgb) return `rgba(23, 18, 32, ${alpha})`;
-
-  const [red, green, blue] = rgb;
-  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+function brightenPosterColor(red: number, green: number, blue: number) {
+  const mix = 0.42;
+  return `#${toHex(Math.round(red * (1 - mix) + 255 * mix))}${toHex(
+    Math.round(green * (1 - mix) + 255 * mix),
+  )}${toHex(Math.round(blue * (1 - mix) + 255 * mix))}`;
 }
 
-function usePosterColor(imageUrl: string) {
-  const [color, setColor] = useState<string>(fallbackPosterColor);
+function relativeLuminance(red: number, green: number, blue: number) {
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+}
+
+function posterToneFromColor(red: number, green: number, blue: number): PosterTone {
+  const isLight = relativeLuminance(red, green, blue) >= 150;
+  return {
+    background: isLight
+      ? brightenPosterColor(red, green, blue)
+      : darkenPosterColor(red, green, blue),
+    isLight,
+  };
+}
+
+function usePosterTone(imageUrl: string | null) {
+  const [tone, setTone] = useState<PosterTone>({
+    background: fallbackPosterColor,
+    isLight: false,
+  });
 
   useEffect(() => {
     if (!imageUrl) {
-      setColor(fallbackPosterColor);
+      setTone({ background: fallbackPosterColor, isLight: false });
       return;
     }
 
     let cancelled = false;
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.decoding = "async";
 
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.decoding = "async";
-
-    const cleanup = () => {
-      cancelled = true;
-      img.onload = null;
-      img.onerror = null;
-    };
-
-    img.onload = () => {
+    image.onload = () => {
       if (cancelled) return;
 
       try {
-        const width = img.naturalWidth || 1;
-        const height = img.naturalHeight || 1;
-        const scale = Math.min(1, 20 / width, 20 / height);
         const canvas = document.createElement("canvas");
-        const context = canvas.getContext("2d");
+        const context = canvas.getContext("2d", { willReadFrequently: true });
         if (!context) return;
 
-        canvas.width = Math.max(1, Math.round(width * scale));
-        canvas.height = Math.max(1, Math.round(height * scale));
-        context.drawImage(img, 0, 0, canvas.width, canvas.height);
-        const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
+        canvas.width = 24;
+        canvas.height = 24;
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+        const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
         let redTotal = 0;
         let greenTotal = 0;
         let blueTotal = 0;
-        let sampleCount = 0;
+        let samples = 0;
 
-        for (let index = 0; index < data.length; index += 4) {
-          const alpha = data[index + 3] / 255;
-          if (alpha <= 0.1) continue;
-          redTotal += data[index];
-          greenTotal += data[index + 1];
-          blueTotal += data[index + 2];
-          sampleCount += 1;
+        for (let index = 0; index < pixels.length; index += 4) {
+          const pixel = index / 4;
+          const y = Math.floor(pixel / canvas.width);
+          if (y < canvas.height * 0.45) continue;
+
+          const alpha = pixels[index + 3];
+          if (alpha < 32) continue;
+
+          const red = pixels[index];
+          const green = pixels[index + 1];
+          const blue = pixels[index + 2];
+          const brightness = red + green + blue;
+          if (brightness < 24 || brightness > 720) continue;
+
+          redTotal += red;
+          greenTotal += green;
+          blueTotal += blue;
+          samples += 1;
         }
 
-        if (!sampleCount) {
-          setColor(fallbackPosterColor);
-          return;
-        }
+        if (!samples) return;
 
-        setColor(
-          toHex([
-            Math.round(redTotal / sampleCount),
-            Math.round(greenTotal / sampleCount),
-            Math.round(blueTotal / sampleCount),
-          ]),
-        );
-      } catch (error) {
-        setColor(fallbackPosterColor);
+        setTone(posterToneFromColor(redTotal / samples, greenTotal / samples, blueTotal / samples));
+      } catch {
+        setTone({ background: fallbackPosterColor, isLight: false });
       }
     };
 
-    img.onerror = () => {
-      if (!cancelled) setColor(fallbackPosterColor);
+    image.onerror = () => {
+      if (!cancelled) setTone({ background: fallbackPosterColor, isLight: false });
     };
+    image.src = imageUrl;
 
-    img.src = imageUrl;
-
-    return cleanup;
+    return () => {
+      cancelled = true;
+      image.onload = null;
+      image.onerror = null;
+    };
   }, [imageUrl]);
 
-  return color;
+  return tone;
+}
+
+function eventDurationMinutes(event: HaraEventDetail) {
+  const start = new Date(event.start_at).getTime();
+  const end = new Date(event.end_at).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
+  return Math.round((end - start) / 60000);
+}
+
+function cheapestAvailableTicket(event: HaraEventDetail) {
+  return event.ticket_types
+    .filter((ticketType) => ticketType.is_available)
+    .toSorted((left, right) => Number(left.price) - Number(right.price))[0];
+}
+
+function compactCount(value: number) {
+  if (value >= 1000) return `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}K`;
+  return String(value);
 }
 
 export function EventDetail({
@@ -198,11 +226,15 @@ export function EventDetail({
   const [state, setState] = useState<EventDetailState>({ kind: "loading" });
   const [quantities, setQuantities] = useState<Quantities>({});
   const [submitting, setSubmitting] = useState(false);
+  const [following, setFollowing] = useState(false);
   const [reservationError, setReservationError] = useState<string | null>(null);
   const attemptRef = useRef<{
     signature: string;
     attempt: OrderCheckoutAttempt;
   } | null>(null);
+  const posterTone = usePosterTone(
+    state.kind === "success" ? safePosterUrl(state.event.cover_image_url) : null,
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -252,7 +284,16 @@ export function EventDetail({
       : [];
 
   const handleReservation = async () => {
-    if (state.kind !== "success" || !selectedItems.length || submitting) return;
+    if (state.kind !== "success" || submitting) return;
+
+    const defaultTicket = cheapestAvailableTicket(state.event);
+    const checkoutItems =
+      selectedItems.length > 0
+        ? selectedItems
+        : defaultTicket
+          ? [{ ticket_type_id: defaultTicket.id, quantity: defaultTicket.min_quantity }]
+          : [];
+    if (!checkoutItems.length) return;
 
     writeDraft(slug, quantities);
     if (authStatus !== "authenticated") {
@@ -260,7 +301,7 @@ export function EventDetail({
       return;
     }
 
-    const signature = JSON.stringify(selectedItems);
+    const signature = JSON.stringify(checkoutItems);
     if (attemptRef.current?.signature !== signature) {
       attemptRef.current = {
         signature,
@@ -271,7 +312,7 @@ export function EventDetail({
     setSubmitting(true);
     setReservationError(null);
     try {
-      const order = await attemptRef.current.attempt.submit(selectedItems);
+      const order = await attemptRef.current.attempt.submit(checkoutItems);
       window.sessionStorage.removeItem(draftKey(slug));
       router.push(`/checkout/${encodeURIComponent(order.id)}`);
     } catch (error) {
@@ -328,6 +369,47 @@ export function EventDetail({
     }
   };
 
+  const handleOrganizerFollow = async () => {
+    if (state.kind !== "success" || following) return;
+
+    if (authStatus !== "authenticated") {
+      router.push(loginHref(`/events/${encodeURIComponent(slug)}`));
+      return;
+    }
+
+    const organizer = state.event.organizer;
+    setFollowing(true);
+    try {
+      if (organizer.is_followed) {
+        await eventsApi.unfollowOrganizer(organizer.id);
+      } else {
+        await eventsApi.followOrganizer(organizer.id);
+      }
+
+      setState((current) =>
+        current.kind !== "success"
+          ? current
+          : {
+              kind: "success",
+              event: {
+                ...current.event,
+                organizer: {
+                  ...current.event.organizer,
+                  is_followed: !organizer.is_followed,
+                  follower_count: Math.max(
+                    0,
+                    current.event.organizer.follower_count +
+                      (organizer.is_followed ? -1 : 1),
+                  ),
+                },
+              },
+            },
+      );
+    } finally {
+      setFollowing(false);
+    }
+  };
+
   if (state.kind === "loading") return <PageLoader label="Tədbir yüklənir…" />;
 
   if (state.kind === "not-found") {
@@ -356,49 +438,251 @@ export function EventDetail({
   }
 
   const event = state.event;
-  const posterColor = usePosterColor(safePosterUrl(event.cover_image_url) ?? "");
-  const mainBackground = `linear-gradient(180deg, ${withAlpha(posterColor, 0.22)}, ${withAlpha(
-    posterColor,
-    0.06,
-  )} 40%, #09090e 100%)`;
-  const cardBackground = `linear-gradient(180deg, ${withAlpha(posterColor, 0.95)} 0%, #111118 32%, #111118 100%)`;
+  const coverSrc = safePosterUrl(event.cover_image_url);
+  const photos = event.photos.flatMap((photo) => {
+    const imageUrl = safePosterUrl(photo.image_url);
+    return imageUrl ? [{ ...photo, image_url: imageUrl }] : [];
+  }).slice(0, 4);
+  const cheapestTicket = cheapestAvailableTicket(event);
+  const duration = eventDurationMinutes(event);
+  const footerPrice = cheapestTicket
+    ? formatMoney(cheapestTicket.price, cheapestTicket.currency)
+    : "Satış yoxdur";
+  const canReserve =
+    Boolean(cheapestTicket || selectedItems.length) && !submitting && authStatus !== "loading";
+  const eventTextClass = posterTone.isLight ? "text-[color:var(--event-text)]" : "text-white";
+  const eventMutedClass = posterTone.isLight ? "text-[color:var(--event-muted)]" : "text-white/66";
+  const eventSubtleClass = posterTone.isLight ? "text-[color:var(--event-subtle)]" : "text-white/45";
+  const eventCardClass = posterTone.isLight
+    ? "border-[color:var(--event-border)] bg-[var(--event-card)]"
+    : "border-white/[0.32] bg-white/[0.12]";
+  const eventSoftCardClass = posterTone.isLight
+    ? "border-[color:var(--event-soft-border)] bg-[var(--event-card)]"
+    : "border-white/20 bg-white/10";
+  const iconClass = posterTone.isLight
+    ? "bg-[#565dd8]/[0.08] text-[#565dd8]"
+    : "bg-[#98ff00]/[0.08] text-[#98ff00]";
+  const navIconClass = posterTone.isLight
+    ? "bg-black/20 text-[#111118] hover:bg-black/28"
+    : "bg-white/20 text-white hover:bg-white/28";
+  const footerClass = posterTone.isLight
+    ? "border-black/10 bg-white/20 text-[color:var(--event-text)]"
+    : "border-white/12 bg-white/20 text-white";
+  const backgroundStyle = coverSrc
+      ? ({
+          "--event-cover": `url("${coverSrc}")`,
+          "--event-bg": posterTone.background,
+          "--event-text": posterTone.isLight ? "rgba(0,0,0,0.92)" : "#ffffff",
+          "--event-muted": posterTone.isLight ? "rgba(0,0,0,0.66)" : "rgba(255,255,255,0.66)",
+          "--event-subtle": posterTone.isLight ? "rgba(0,0,0,0.45)" : "rgba(255,255,255,0.45)",
+          "--event-card": posterTone.isLight ? "rgba(31,31,51,0.12)" : "rgba(255,255,255,0.12)",
+          "--event-border": posterTone.isLight ? "rgba(17,17,24,0.32)" : "rgba(255,255,255,0.32)",
+          "--event-soft-border": posterTone.isLight ? "rgba(17,17,24,0.2)" : "rgba(255,255,255,0.2)",
+        } as CSSProperties & Record<string, string>)
+    : ({
+        "--event-bg": posterTone.isLight ? lightPosterFallbackColor : posterTone.background,
+        "--event-text": posterTone.isLight ? "rgba(0,0,0,0.92)" : "#ffffff",
+        "--event-muted": posterTone.isLight ? "rgba(0,0,0,0.66)" : "rgba(255,255,255,0.66)",
+        "--event-subtle": posterTone.isLight ? "rgba(0,0,0,0.45)" : "rgba(255,255,255,0.45)",
+        "--event-card": posterTone.isLight ? "rgba(31,31,51,0.12)" : "rgba(255,255,255,0.12)",
+        "--event-border": posterTone.isLight ? "rgba(17,17,24,0.32)" : "rgba(255,255,255,0.32)",
+        "--event-soft-border": posterTone.isLight ? "rgba(17,17,24,0.2)" : "rgba(255,255,255,0.2)",
+      } as CSSProperties & Record<string, string>);
 
   return (
     <main
-      className="mx-auto w-full max-w-4xl px-4 py-7 sm:px-6 sm:py-10"
-      style={{ background: mainBackground, minHeight: "100dvh" }}
+      className="hara-home min-h-screen bg-[var(--event-bg)] text-white"
+      style={backgroundStyle}
     >
-      <Link href="/" className="inline-grid min-h-11 place-items-center rounded-xl px-2 text-sm font-semibold text-white/55 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#98ff00]">← Tədbirlərə qayıt</Link>
+      <article className="relative mx-auto min-h-screen w-full max-w-[402px] overflow-hidden bg-[var(--event-bg)] pb-[calc(116px+var(--hara-safe-bottom))] shadow-2xl shadow-black/30">
+        {coverSrc ? (
+          <div
+            aria-hidden
+            className="absolute inset-0 scale-125 bg-cover bg-center opacity-[0.9] blur-3xl [background-image:var(--event-cover)]"
+          />
+        ) : null}
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.08)_0%,rgba(0,0,0,0.34)_38%,var(--event-bg)_58%)]" />
 
-      <article className="mt-3 overflow-hidden rounded-3xl border border-white/10" style={{ background: cardBackground }}>
-        <EventPoster src={event.cover_image_url} title={event.title} priority className="aspect-[16/9] max-h-[430px]" posterColor={posterColor} />
-        <div className="grid gap-7 p-5 sm:p-8 md:grid-cols-[1fr_280px]">
-          <div>
-            <span className="rounded-lg bg-[#565dd8]/20 px-2.5 py-1 text-xs font-bold text-[#aeb1ff]">{event.category.name}</span>
-            <h1 className="mt-4 text-3xl leading-tight font-bold tracking-tight sm:text-4xl">{event.title}</h1>
-            <dl className="mt-6 space-y-4 text-sm">
-              <div><dt className="font-bold text-white/35 uppercase">Başlama vaxtı</dt><dd className="mt-1 font-semibold">{formatBakuDate(event.start_at)}</dd></div>
-              <div><dt className="font-bold text-white/35 uppercase">Bitmə vaxtı</dt><dd className="mt-1 font-semibold">{formatBakuDate(event.end_at)}</dd></div>
-              <div>
-                <dt className="font-bold text-white/35 uppercase">Məkan</dt>
-                <dd className="mt-1 font-semibold">{event.venue.name}{event.venue.city ? `, ${event.venue.city}` : ""}</dd>
-                <dd className="mt-1 text-white/50">{event.venue.address}</dd>
+        <section className="relative h-[402px] overflow-hidden rounded-b-[32px]">
+          {coverSrc ? (
+            // Event posters may be hosted on arbitrary API-configured origins.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={coverSrc}
+              alt={`${event.title} posteri`}
+              loading="eager"
+              fetchPriority="high"
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          ) : (
+            <div className="absolute inset-0 grid place-items-center bg-[#171720] px-6 text-center text-sm font-semibold text-white/35">
+              Poster yoxdur
+            </div>
+          )}
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.18)_0%,rgba(0,0,0,0)_48%,var(--event-bg)_100%)]" />
+          <nav className="absolute inset-x-0 top-0 flex items-center justify-between px-4 pt-[calc(16px+var(--hara-safe-top))]">
+            <Link
+              href="/"
+              aria-label="Tədbirlərə qayıt"
+              className={`grid size-10 place-items-center rounded-full text-[24px] leading-none backdrop-blur-md transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${navIconClass}`}
+            >
+              ‹
+            </Link>
+            <button
+              type="button"
+              aria-label="Sevimlilərə əlavə et"
+              className={`grid size-10 place-items-center rounded-full text-[22px] leading-none backdrop-blur-md transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${navIconClass}`}
+            >
+              ♡
+            </button>
+          </nav>
+          <div className="absolute inset-x-0 bottom-0 px-4 pb-4">
+            <h1 className={`text-[28px] leading-[34px] font-bold tracking-[0.01em] ${eventTextClass}`}>
+              {event.title}
+            </h1>
+            <p className={`mt-1 text-[13px] leading-[18px] ${eventMutedClass}`}>
+              {formatBakuDate(event.start_at, true).replace(" •", ",")}
+            </p>
+          </div>
+        </section>
+
+        <div className="relative space-y-8 px-4 pt-4">
+          <section className={`rounded-2xl border p-3 backdrop-blur-sm ${eventCardClass}`}>
+            <div className="flex gap-3">
+              <div className={`grid size-8 shrink-0 place-items-center rounded-full ${iconClass}`}>
+                ⊙
               </div>
-            </dl>
-            {event.description ? (
-              <section className="mt-8" aria-labelledby="description-heading">
-                <h2 id="description-heading" className="text-xl font-bold">Tədbir haqqında</h2>
-                <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-white/65">{event.description}</p>
-              </section>
-            ) : null}
+              <div className="min-w-0 flex-1">
+                <p className={`text-[12px] leading-4 ${eventMutedClass}`}>Məkan</p>
+                <p className={`mt-1 text-[13px] leading-[18px] font-semibold ${eventTextClass}`}>
+                  {event.venue.name}
+                </p>
+                <p className={`text-[13px] leading-[18px] ${eventMutedClass}`}>
+                  {[event.venue.address, event.venue.city].filter(Boolean).join(", ")}
+                </p>
+              </div>
+              {event.venue.latitude !== null && event.venue.longitude !== null ? (
+                <Link
+                  href={`/map?event=${encodeURIComponent(event.slug)}`}
+                  className="h-8 shrink-0 rounded-lg bg-[#565dd8]/[0.35] px-3 text-[12px] leading-8 font-medium text-white"
+                >
+                  Xəritədə bax
+                </Link>
+              ) : null}
+            </div>
+          </section>
+
+          <div className="grid grid-cols-2 gap-2">
+            <section className={`rounded-2xl border p-3 backdrop-blur-sm ${eventCardClass}`}>
+              <div className="flex items-center gap-3">
+                <div className={`grid size-8 shrink-0 place-items-center rounded-full ${iconClass}`}>
+                  ▣
+                </div>
+                <div>
+                  <p className={`text-[12px] leading-4 ${eventMutedClass}`}>Yaş həddi</p>
+                  <p className={`mt-1 text-[15px] leading-5 font-semibold ${eventTextClass}`}>6+</p>
+                </div>
+              </div>
+            </section>
+            <section className={`rounded-2xl border p-3 backdrop-blur-sm ${eventCardClass}`}>
+              <div className="flex items-center gap-3">
+                <div className={`grid size-8 shrink-0 place-items-center rounded-full ${iconClass}`}>
+                  ◷
+                </div>
+                <div>
+                  <p className={`text-[12px] leading-4 ${eventMutedClass}`}>Müddət</p>
+                  <p className={`mt-1 text-[15px] leading-5 font-semibold ${eventTextClass}`}>
+                    {duration ? `${duration} dəqiqə` : "Məlum deyil"}
+                  </p>
+                </div>
+              </div>
+            </section>
           </div>
 
-          <aside className="h-fit rounded-2xl border border-amber-300/20 bg-amber-300/[0.07] p-5">
-            <h2 className="text-lg font-bold text-amber-100">Bilet satışı</h2>
+          {event.description ? (
+            <section aria-labelledby="description-heading">
+              <h2 id="description-heading" className={`text-[12px] leading-4 ${eventMutedClass}`}>
+                Tədbir haqqında
+              </h2>
+              <p className={`mt-3 whitespace-pre-wrap text-[13px] leading-[18px] ${eventTextClass}`}>
+                {event.description}
+              </p>
+            </section>
+          ) : null}
+
+          {photos.length > 0 ? (
+            <section aria-labelledby="photos-heading">
+              <h2 id="photos-heading" className={`text-[12px] leading-4 ${eventMutedClass}`}>
+                Fotolar
+              </h2>
+              <div className="scrollbar-none mt-2 flex gap-2 overflow-x-auto">
+                {photos.map((photo) => (
+                  <div
+                    key={photo.id}
+                    className="relative h-[76px] w-20 shrink-0 overflow-hidden rounded-lg bg-black/10"
+                  >
+                    {/* Event gallery image hosts are controlled through the API. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={photo.image_url}
+                      alt=""
+                      loading="lazy"
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          <section className={`rounded-2xl border p-3 ${eventCardClass}`}>
+            <div className="flex items-start gap-3">
+              <div className="relative size-8 shrink-0 overflow-hidden rounded-full bg-black/10">
+                {safePosterUrl(event.organizer.avatar_url) ? (
+                  // Organizer avatar hosts are controlled through the API.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={safePosterUrl(event.organizer.avatar_url) ?? ""}
+                    alt=""
+                    loading="lazy"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className={`grid h-full w-full place-items-center text-[13px] font-semibold ${eventTextClass}`}>
+                    {event.organizer.name.slice(0, 1).toUpperCase()}
+                  </div>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className={`text-[12px] leading-4 ${eventMutedClass}`}>Təşkilatçı</p>
+                <p className={`mt-1 truncate text-[13px] leading-[18px] font-semibold ${eventTextClass}`}>
+                  {event.organizer.name}
+                </p>
+                <p className={`text-[13px] leading-[18px] ${eventMutedClass}`}>
+                  {compactCount(event.organizer.event_count)} tədbir · {compactCount(event.organizer.follower_count)} izləyici
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleOrganizerFollow}
+                disabled={following || authStatus === "loading"}
+                className="h-6 shrink-0 rounded-lg bg-[#565dd8] px-2 text-[12px] leading-6 text-white disabled:opacity-55"
+              >
+                {event.organizer.is_followed ? "İzlənilir" : "İzlə"}
+              </button>
+            </div>
+          </section>
+
+          <section aria-labelledby="tickets-heading">
+            <h2 id="tickets-heading" className={`text-[12px] leading-4 ${eventMutedClass}`}>
+              Biletlər
+            </h2>
             {event.ticket_types.length === 0 ? (
-              <p className="mt-2 text-sm leading-6 text-amber-50/65">Biletlər hazırda satışda deyil.</p>
+              <p className={`mt-2 text-[13px] leading-[18px] ${eventMutedClass}`}>
+                Biletlər hazırda satışda deyil.
+              </p>
             ) : (
-              <div className="mt-4 space-y-3">
+              <div className="mt-3 space-y-2">
                 {event.ticket_types.map((ticketType) => {
                   const quantity = quantities[ticketType.id] ?? 0;
                   const unavailableLabel =
@@ -406,38 +690,57 @@ export function EventDetail({
                       ? null
                       : salesLabels[ticketType.sales_status];
                   return (
-                    <section key={ticketType.id} className="rounded-xl border border-white/10 bg-black/10 p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div><h3 className="text-sm font-bold">{ticketType.name}</h3><p className="mt-1 text-xs text-white/45">{ticketType.available_quantity} bilet qalıb</p></div>
-                        <span className="text-sm font-bold text-amber-100">{formatMoney(ticketType.price, ticketType.currency)}</span>
+                    <section
+                      key={ticketType.id}
+                      className={`rounded-2xl border p-3 ${eventSoftCardClass}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h3 className={`text-[13px] leading-[18px] font-semibold ${eventTextClass}`}>
+                            {ticketType.name}
+                          </h3>
+                          <p className={`mt-1 text-[12px] leading-4 ${eventSubtleClass}`}>
+                            {ticketType.available_quantity} bilet qalıb
+                          </p>
+                        </div>
+                        <span className={`shrink-0 text-[13px] leading-[18px] font-semibold ${eventTextClass}`}>
+                          {formatMoney(ticketType.price, ticketType.currency)}
+                        </span>
                       </div>
                       {ticketType.is_available ? (
                         <div className="mt-3 flex items-center justify-between gap-2">
-                          <span className="text-xs text-white/50">Say</span>
+                          <span className={`text-[12px] leading-4 ${eventSubtleClass}`}>Say</span>
                           <div className="flex items-center gap-2">
-                            <button type="button" aria-label={`${ticketType.name} sayını azalt`} onClick={() => setQuantity(ticketType.id, quantity - 1)} disabled={quantity === 0 || submitting} className="grid size-9 place-items-center rounded-lg bg-white/10 font-bold disabled:opacity-35">−</button>
-                            <output aria-label={`${ticketType.name} sayı`} className="min-w-5 text-center text-sm font-bold">{quantity}</output>
-                            <button type="button" aria-label={`${ticketType.name} sayını artır`} onClick={() => setQuantity(ticketType.id, quantity === 0 ? ticketType.min_quantity : quantity + 1)} disabled={quantity >= ticketType.max_quantity || submitting} className="grid size-9 place-items-center rounded-lg bg-white/10 font-bold disabled:opacity-35">+</button>
+                            <button type="button" aria-label={`${ticketType.name} sayını azalt`} onClick={() => setQuantity(ticketType.id, quantity - 1)} disabled={quantity === 0 || submitting} className={`grid size-9 place-items-center rounded-lg bg-white/10 font-bold disabled:opacity-35 ${eventTextClass}`}>−</button>
+                            <output aria-label={`${ticketType.name} sayı`} className={`min-w-5 text-center text-[13px] font-bold ${eventTextClass}`}>{quantity}</output>
+                            <button type="button" aria-label={`${ticketType.name} sayını artır`} onClick={() => setQuantity(ticketType.id, quantity === 0 ? ticketType.min_quantity : quantity + 1)} disabled={quantity >= ticketType.max_quantity || submitting} className={`grid size-9 place-items-center rounded-lg bg-white/10 font-bold disabled:opacity-35 ${eventTextClass}`}>+</button>
                           </div>
                         </div>
-                      ) : <p className="mt-3 text-xs font-semibold text-amber-100/65">{unavailableLabel}</p>}
+                      ) : <p className={`mt-3 text-[12px] font-semibold ${eventMutedClass}`}>{unavailableLabel}</p>}
                     </section>
                   );
                 })}
               </div>
             )}
-
             {reservationError ? <div className="mt-4"><InlineError message={reservationError} /></div> : null}
+          </section>
+        </div>
+
+        <div className={`fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-[402px] border-t px-4 pt-4 pb-[calc(16px+var(--hara-safe-bottom))] backdrop-blur-xl ${footerClass}`}>
+          <div className="flex items-center gap-4">
+            <p className="min-w-0 flex-1 text-[22px] leading-7 font-bold tracking-[-0.01em]">
+              {footerPrice}
+            </p>
             <button
               type="button"
               onClick={handleReservation}
-              disabled={!selectedItems.length || submitting || authStatus === "loading"}
-              className="mt-4 min-h-12 w-full rounded-xl bg-[#98ff00] px-4 text-sm font-bold text-[#18181a] transition hover:bg-[#b0ff3d] disabled:cursor-not-allowed disabled:opacity-45"
+              disabled={!canReserve}
+              aria-label={authStatus === "authenticated" ? "Biletləri rezerv et" : "Daxil ol və rezerv et"}
+              className="h-12 shrink-0 rounded-2xl bg-[#565dd8] px-5 text-[16px] leading-[21px] font-semibold text-white transition hover:bg-[#666de4] disabled:cursor-not-allowed disabled:opacity-45"
             >
-              {submitting ? "Rezervasiya edilir…" : authStatus === "authenticated" ? "Biletləri rezerv et" : "Daxil ol və rezerv et"}
+              {submitting ? "Gözlə" : "Bilet al"}
             </button>
-            <p className="mt-3 text-xs leading-5 text-white/40">Qiymət və mövcud say sifariş yaradılarkən backend tərəfindən yenidən yoxlanılır.</p>
-          </aside>
+          </div>
         </div>
       </article>
     </main>

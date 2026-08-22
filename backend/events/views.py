@@ -1,4 +1,4 @@
-from django.db.models import Prefetch, Q
+from django.db.models import Count, Prefetch, Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.utils import (
@@ -26,6 +26,9 @@ from ticketing.models import TicketType
 from .models import (
     Event,
     Favorite,
+    EventPhoto,
+    Notification,
+    OrganizerFollow,
     Venue,
     VenuePlan,
     VenueSeat,
@@ -37,6 +40,8 @@ from .serializers import (
     EventSeatingPlanSerializer,
     EventSerializer,
     FavoriteCreateSerializer,
+    NotificationSerializer,
+    OrganizerFollowSerializer,
     OrganizerEventSerializer,
     OrganizerVenueSerializer,
     VenuePlanSerializer,
@@ -160,7 +165,24 @@ class EventDetailAPIView(RetrieveAPIView):
                 venue__is_active=True,
             )
             .select_related("category", "venue", "organizer")
+            .annotate(
+                organizer_event_count=Count(
+                    "organizer__organized_events",
+                    filter=Q(
+                        organizer__organized_events__status=Event.Status.PUBLISHED,
+                    ),
+                    distinct=True,
+                ),
+                organizer_follower_count=Count(
+                    "organizer__followers",
+                    distinct=True,
+                ),
+            )
             .prefetch_related(
+                Prefetch(
+                    "photos",
+                    queryset=EventPhoto.objects.order_by("sort_order", "id")[:4],
+                ),
                 Prefetch(
                     "ticket_types",
                     queryset=ticket_types,
@@ -286,6 +308,66 @@ class FavoriteDetailAPIView(APIView):
             event_id=event_id,
         ).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class OrganizerFollowAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        operation_id="organizer_follow",
+        description=(
+            "Follow an organizer and receive in-app notifications when "
+            "they publish a new event."
+        ),
+        request=OrganizerFollowSerializer,
+        responses={200: OrganizerFollowSerializer},
+    )
+    def post(self, request, organizer_id):
+        organizer_model = request.user.__class__
+        organizer = get_object_or_404(
+            organizer_model.objects.filter(account_type="organizer"),
+            id=organizer_id,
+        )
+        if organizer == request.user:
+            return Response(
+                {"detail": "Öz hesabınızı izləyə bilməzsiniz."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        OrganizerFollow.objects.get_or_create(
+            user=request.user,
+            organizer=organizer,
+        )
+        return Response({"organizer_id": organizer.id, "is_followed": True})
+
+    @extend_schema(
+        operation_id="organizer_unfollow",
+        description="Stop following an organizer.",
+        responses={204: None},
+    )
+    def delete(self, request, organizer_id):
+        OrganizerFollow.objects.filter(
+            user=request.user,
+            organizer_id=organizer_id,
+        ).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class NotificationListAPIView(ListAPIView):
+    serializer_class = NotificationSerializer
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        operation_id="notification_list",
+        description="Authenticated user's in-app notifications.",
+        responses={200: NotificationSerializer(many=True)},
+    )
+    def get_queryset(self):
+        return (
+            Notification.objects
+            .filter(user=self.request.user)
+            .select_related("event", "organizer")
+        )
 
 
 @extend_schema_view(

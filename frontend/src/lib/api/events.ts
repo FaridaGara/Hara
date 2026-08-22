@@ -3,6 +3,7 @@ import type {
   EventListFilters,
   HaraEvent,
   HaraEventDetail,
+  OrganizerFollowResponse,
 } from "./contracts";
 
 function eventListQuery(filters: EventListFilters) {
@@ -30,8 +31,29 @@ export const eventsApi = {
 
   detail(slug: string, signal?: AbortSignal) {
     return apiRequest<HaraEventDetail>(`/api/events/${encodeURIComponent(slug)}/`, {
-      auth: "none",
+      auth: "optional",
       signal,
     });
+  },
+
+  followOrganizer(organizerId: number) {
+    return apiRequest<OrganizerFollowResponse>(
+      `/api/organizers/${encodeURIComponent(String(organizerId))}/follow/`,
+      {
+        auth: "required",
+        method: "POST",
+        body: { organizer_id: organizerId },
+      },
+    );
+  },
+
+  unfollowOrganizer(organizerId: number) {
+    return apiRequest<void>(
+      `/api/organizers/${encodeURIComponent(String(organizerId))}/follow/`,
+      {
+        auth: "required",
+        method: "DELETE",
+      },
+    );
   },
 };

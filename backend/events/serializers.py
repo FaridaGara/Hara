@@ -8,6 +8,9 @@ from ticketing.serializers import PublicTicketTypeSerializer
 from .models import (
     Category,
     Event,
+    EventPhoto,
+    Notification,
+    OrganizerFollow,
     Venue,
     VenuePlan,
     VenueSeat,
@@ -298,6 +301,13 @@ class EventSerializer(serializers.ModelSerializer):
         )
 
 
+class EventPhotoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EventPhoto
+        fields = ("id", "image_url", "sort_order")
+        read_only_fields = fields
+
+
 class EventDetailSerializer(EventSerializer):
     venue_plan_id = serializers.UUIDField(read_only=True)
     ticket_types = PublicTicketTypeSerializer(
@@ -305,12 +315,39 @@ class EventDetailSerializer(EventSerializer):
         many=True,
         read_only=True,
     )
+    photos = EventPhotoSerializer(many=True, read_only=True)
+    organizer = serializers.SerializerMethodField()
 
     class Meta(EventSerializer.Meta):
         fields = EventSerializer.Meta.fields + (
             "venue_plan_id",
             "ticket_types",
+            "photos",
+            "organizer",
         )
+
+    def get_organizer(self, obj):
+        organizer = obj.organizer
+        request = self.context.get("request")
+        is_followed = False
+        if request and request.user.is_authenticated:
+            is_followed = OrganizerFollow.objects.filter(
+                user=request.user,
+                organizer=organizer,
+            ).exists()
+
+        return {
+            "id": organizer.id,
+            "name": (
+                organizer.display_name
+                or organizer.get_full_name()
+                or organizer.email
+            ),
+            "avatar_url": organizer.avatar_url,
+            "event_count": getattr(obj, "organizer_event_count", 0),
+            "follower_count": getattr(obj, "organizer_follower_count", 0),
+            "is_followed": is_followed,
+        }
 
 
 class EventSeatingPlanSerializer(serializers.Serializer):
@@ -327,6 +364,41 @@ class EventSeatingPlanSerializer(serializers.Serializer):
 
 class FavoriteCreateSerializer(serializers.Serializer):
     event_id = serializers.UUIDField()
+
+
+class OrganizerFollowSerializer(serializers.Serializer):
+    organizer_id = serializers.IntegerField()
+
+
+class NotificationSerializer(serializers.ModelSerializer):
+    event_slug = serializers.CharField(source="event.slug", read_only=True)
+    event_title = serializers.CharField(source="event.title", read_only=True)
+    organizer_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Notification
+        fields = (
+            "id",
+            "type",
+            "title",
+            "body",
+            "event_slug",
+            "event_title",
+            "organizer_name",
+            "read_at",
+            "created_at",
+        )
+        read_only_fields = fields
+
+    def get_organizer_name(self, obj):
+        if not obj.organizer:
+            return ""
+
+        return (
+            obj.organizer.display_name
+            or obj.organizer.get_full_name()
+            or obj.organizer.email
+        )
 
 
 class OrganizerEventSerializer(serializers.ModelSerializer):
