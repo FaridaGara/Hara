@@ -11,7 +11,7 @@ import {
   type HaraEventDetail,
   type OrderCreateItem,
 } from "@/lib/api";
-import { formatBakuDate, formatMoney } from "@/lib/format";
+import { formatBakuDate, formatMoney, safePosterUrl } from "@/lib/format";
 import {
   OrderCheckoutAttempt,
   orderCreationError,
@@ -71,6 +71,117 @@ const salesLabels = {
   SOLD_OUT: "Biletlər bitib",
   ENDED: "Satış başa çatıb",
 } as const;
+
+const fallbackPosterColor = "#171720";
+
+function parseHexColor(color: string): [number, number, number] | null {
+  const match = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color.trim());
+  if (!match) return null;
+
+  const normalized =
+    match[1].length === 3
+      ? match[1]
+          .split("")
+          .map((symbol) => symbol.repeat(2))
+          .join("")
+      : match[1];
+
+  const value = Number.parseInt(normalized, 16);
+  return [(value >> 16) & 0xff, (value >> 8) & 0xff, value & 0xff];
+}
+
+function toHex(rgb: readonly [number, number, number]) {
+  return `#${rgb
+    .map((value) => value.toString(16).padStart(2, "0"))
+    .join("")}`;
+}
+
+function withAlpha(color: string, alpha: number) {
+  const rgb = parseHexColor(color);
+  if (!rgb) return `rgba(23, 18, 32, ${alpha})`;
+
+  const [red, green, blue] = rgb;
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
+function usePosterColor(imageUrl: string) {
+  const [color, setColor] = useState<string>(fallbackPosterColor);
+
+  useEffect(() => {
+    if (!imageUrl) {
+      setColor(fallbackPosterColor);
+      return;
+    }
+
+    let cancelled = false;
+
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.decoding = "async";
+
+    const cleanup = () => {
+      cancelled = true;
+      img.onload = null;
+      img.onerror = null;
+    };
+
+    img.onload = () => {
+      if (cancelled) return;
+
+      try {
+        const width = img.naturalWidth || 1;
+        const height = img.naturalHeight || 1;
+        const scale = Math.min(1, 20 / width, 20 / height);
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d");
+        if (!context) return;
+
+        canvas.width = Math.max(1, Math.round(width * scale));
+        canvas.height = Math.max(1, Math.round(height * scale));
+        context.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
+        let redTotal = 0;
+        let greenTotal = 0;
+        let blueTotal = 0;
+        let sampleCount = 0;
+
+        for (let index = 0; index < data.length; index += 4) {
+          const alpha = data[index + 3] / 255;
+          if (alpha <= 0.1) continue;
+          redTotal += data[index];
+          greenTotal += data[index + 1];
+          blueTotal += data[index + 2];
+          sampleCount += 1;
+        }
+
+        if (!sampleCount) {
+          setColor(fallbackPosterColor);
+          return;
+        }
+
+        setColor(
+          toHex([
+            Math.round(redTotal / sampleCount),
+            Math.round(greenTotal / sampleCount),
+            Math.round(blueTotal / sampleCount),
+          ]),
+        );
+      } catch (error) {
+        setColor(fallbackPosterColor);
+      }
+    };
+
+    img.onerror = () => {
+      if (!cancelled) setColor(fallbackPosterColor);
+    };
+
+    img.src = imageUrl;
+
+    return cleanup;
+  }, [imageUrl]);
+
+  return color;
+}
 
 export function EventDetail({
   slug,
@@ -245,12 +356,22 @@ export function EventDetail({
   }
 
   const event = state.event;
+  const posterColor = usePosterColor(safePosterUrl(event.cover_image_url) ?? "");
+  const mainBackground = `linear-gradient(180deg, ${withAlpha(posterColor, 0.22)}, ${withAlpha(
+    posterColor,
+    0.06,
+  )} 40%, #09090e 100%)`;
+  const cardBackground = `linear-gradient(180deg, ${withAlpha(posterColor, 0.95)} 0%, #111118 32%, #111118 100%)`;
+
   return (
-    <main className="mx-auto w-full max-w-4xl px-4 py-7 sm:px-6 sm:py-10">
+    <main
+      className="mx-auto w-full max-w-4xl px-4 py-7 sm:px-6 sm:py-10"
+      style={{ background: mainBackground, minHeight: "100dvh" }}
+    >
       <Link href="/" className="inline-grid min-h-11 place-items-center rounded-xl px-2 text-sm font-semibold text-white/55 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#98ff00]">← Tədbirlərə qayıt</Link>
 
-      <article className="mt-3 overflow-hidden rounded-3xl border border-white/10 bg-[#111118]">
-        <EventPoster src={event.cover_image_url} title={event.title} priority className="aspect-[16/9] max-h-[430px]" />
+      <article className="mt-3 overflow-hidden rounded-3xl border border-white/10" style={{ background: cardBackground }}>
+        <EventPoster src={event.cover_image_url} title={event.title} priority className="aspect-[16/9] max-h-[430px]" posterColor={posterColor} />
         <div className="grid gap-7 p-5 sm:p-8 md:grid-cols-[1fr_280px]">
           <div>
             <span className="rounded-lg bg-[#565dd8]/20 px-2.5 py-1 text-xs font-bold text-[#aeb1ff]">{event.category.name}</span>
