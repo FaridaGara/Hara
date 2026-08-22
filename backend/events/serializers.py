@@ -344,8 +344,10 @@ class EventDetailSerializer(EventSerializer):
                 or organizer.email
             ),
             "avatar_url": organizer.avatar_url,
-            "event_count": getattr(obj, "organizer_event_count", 0),
-            "follower_count": getattr(obj, "organizer_follower_count", 0),
+            "event_count": organizer.organized_events.filter(
+                status=Event.Status.PUBLISHED,
+            ).count(),
+            "follower_count": organizer.followers.count(),
             "is_followed": is_followed,
         }
 

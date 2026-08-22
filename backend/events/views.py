@@ -1,4 +1,4 @@
-from django.db.models import Count, Prefetch, Q
+from django.db.models import Prefetch, Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.utils import (
@@ -165,23 +165,10 @@ class EventDetailAPIView(RetrieveAPIView):
                 venue__is_active=True,
             )
             .select_related("category", "venue", "organizer")
-            .annotate(
-                organizer_event_count=Count(
-                    "organizer__organized_events",
-                    filter=Q(
-                        organizer__organized_events__status=Event.Status.PUBLISHED,
-                    ),
-                    distinct=True,
-                ),
-                organizer_follower_count=Count(
-                    "organizer__followers",
-                    distinct=True,
-                ),
-            )
             .prefetch_related(
                 Prefetch(
                     "photos",
-                    queryset=EventPhoto.objects.order_by("sort_order", "id")[:4],
+                    queryset=EventPhoto.objects.order_by("sort_order", "id"),
                 ),
                 Prefetch(
                     "ticket_types",
