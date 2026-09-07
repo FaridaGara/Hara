@@ -4,6 +4,7 @@ from datetime import timedelta
 from urllib.parse import parse_qsl, unquote, urlparse
 from corsheaders.defaults import default_headers
 from dotenv import load_dotenv
+from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -13,12 +14,21 @@ load_dotenv(BASE_DIR.parent / ".env")
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
-SECRET_KEY = os.getenv(
-    "DJANGO_SECRET_KEY",
-    "django-insecure-local-development-only",
-)
-
 DEBUG = os.getenv("DJANGO_DEBUG", "false").lower() == "true"
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "")
+
+if not DEBUG and (
+    not SECRET_KEY.strip()
+    or SECRET_KEY.strip().startswith("django-insecure-")
+    or SECRET_KEY.strip() == "replace-with-a-local-development-secret"
+):
+    raise ImproperlyConfigured(
+        "Set DJANGO_SECRET_KEY to a private random value when DJANGO_DEBUG "
+        "is false. Development keys and empty values are not allowed."
+    )
+
+if DEBUG and not SECRET_KEY.strip():
+    SECRET_KEY = "django-insecure-local-development-only"
 
 def get_env_list(variable_name):
     return [
