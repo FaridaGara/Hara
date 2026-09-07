@@ -470,7 +470,10 @@ class Notification(models.Model):
     class Meta:
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=("user", "read_at", "-created_at")),
+            models.Index(
+                fields=("user", "read_at", "-created_at"),
+                name="events_noti_user_id_5bd402_idx",
+            ),
         ]
         constraints = [
             models.UniqueConstraint(
