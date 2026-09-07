@@ -2,7 +2,9 @@
 
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ClipboardEvent, FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
+import { ClipboardEvent, FormEvent, KeyboardEvent, useRef, useState } from "react";
+
+import { retryAfterSeconds, useRetryCountdown } from "@/hooks/use-retry-countdown";
 
 import { ApiError, authApi } from "@/lib/api";
 import type { VerificationPurpose } from "@/lib/api";
@@ -31,18 +33,12 @@ export function VerificationForm() {
   const [digits, setDigits] = useState(["", "", "", ""]);
   const [submitting, setSubmitting] = useState(false);
   const [resending, setResending] = useState(false);
-  const [remaining, setRemaining] = useState(RESEND_SECONDS);
+  const { remaining, start: startRetry } = useRetryCountdown(
+    retryAfterSeconds({ retry_after: Number(searchParams.get("retry_after")) }, RESEND_SECONDS),
+  );
+  const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const inputsRef = useRef<Array<HTMLInputElement | null>>([]);
-
-  useEffect(() => {
-    if (remaining <= 0) return;
-    const timeout = globalThis.setTimeout(
-      () => setRemaining((value) => Math.max(0, value - 1)),
-      1000,
-    );
-    return () => globalThis.clearTimeout(timeout);
-  }, [remaining]);
 
   const setCode = (value: string) => {
     const nextDigits = value.replace(/\D/g, "").slice(0, CODE_LENGTH).split("");
@@ -98,12 +94,17 @@ export function VerificationForm() {
     if (!email || remaining > 0 || resending) return;
     setResending(true);
     setError(null);
+    setNotice(null);
     try {
-      await authApi.resendVerification(email, purpose);
-      setRemaining(RESEND_SECONDS);
+      const response = await authApi.resendVerification(email, purpose);
+      startRetry(retryAfterSeconds(response));
+      setNotice(response.detail);
       setDigits(["", "", "", ""]);
       inputsRef.current[0]?.focus();
     } catch (caughtError) {
+      if (caughtError instanceof ApiError && caughtError.status === 429) {
+        startRetry(retryAfterSeconds(caughtError.payload));
+      }
       setError(
         caughtError instanceof ApiError
           ? caughtError.message
@@ -127,7 +128,9 @@ export function VerificationForm() {
             Təsdiqləmə kodu
           </div>
           <p className="text-[12px] leading-4 text-[var(--hara-auth-secondary)]">
-            Kodu {email || "e-poçt ünvanınıza"} ünvanına göndərdik
+            {purpose === "password_reset"
+              ? `Uyğun hesab varsa, kod ${email || "e-poçt ünvanınıza"} ünvanına göndərildi.`
+              : `Kodu ${email || "e-poçt ünvanınıza"} ünvanına göndərdik`}
           </p>
         </div>
 
@@ -152,13 +155,13 @@ export function VerificationForm() {
         <div className="space-y-1 text-[13px] leading-[18px]">
           <p className="text-[var(--hara-auth-muted)]">
             {remaining > 0
-              ? `${formatCountdown(remaining)} dəqiqə qaldı`
+              ? `Yenidən göndərmək üçün ${formatCountdown(remaining)} gözləyin`
               : "Yeni kod göndərə bilərsiniz"}
           </p>
           <button
             type="button"
             onClick={resend}
-            disabled={remaining > 0 || resending}
+            disabled={!email || remaining > 0 || resending}
             className="font-semibold text-[#4e55c5] disabled:opacity-50"
           >
             {resending ? "Göndərilir…" : "Kodu yenidən göndər"}
@@ -166,6 +169,7 @@ export function VerificationForm() {
         </div>
         {!email ? <AuthMessage>E-poçt ünvanı tapılmadı. Əvvəlki mərhələyə qayıdın.</AuthMessage> : null}
         {error ? <AuthMessage>{error}</AuthMessage> : null}
+        {notice ? <p role="status" className="text-sm text-[var(--hara-auth-secondary)]">{notice}</p> : null}
         <AuthButton
           type="submit"
           disabled={submitting || !email || digits.some((digit) => !digit)}

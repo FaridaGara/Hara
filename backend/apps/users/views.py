@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import transaction
 from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer
 from rest_framework import serializers as drf_serializers
@@ -20,7 +21,10 @@ from .serializers import (
     VerificationResendSerializer,
 )
 from .social_auth import SocialTokenError, verify_apple_token, verify_google_token
-from .throttles import CredentialsLoginThrottle, LoginThrottled
+from .throttles import (
+    CredentialsLoginThrottle, LoginThrottled,
+    VerificationSendThrottle, VerificationSendThrottled,
+)
 from .verification import (
     VerificationError,
     VerificationRateLimited,
@@ -113,6 +117,7 @@ def verification_error_response(exc):
         return Response(
             {"detail": str(exc), "retry_after": exc.retry_after},
             status=status.HTTP_429_TOO_MANY_REQUESTS,
+            headers={"Retry-After": str(exc.retry_after)},
         )
     return Response(
         {"detail": str(exc)},
@@ -154,28 +159,32 @@ class CredentialsLoginAPIView(APIView):
         return Response(token_payload(serializer.validated_data["user"]))
 
 
+class VerificationSendAPIView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    throttle_classes = [VerificationSendThrottle]
+
+    def throttled(self, request, wait):
+        raise VerificationSendThrottled(wait)
+
+
 @extend_schema_view(
     post=extend_schema(
         auth=[],
         request=RegistrationSerializer,
-        responses={201: AUTH_DELIVERY_SCHEMA},
+        responses={201: AUTH_DELIVERY_SCHEMA, 429: AUTH_DELIVERY_SCHEMA},
     )
 )
-class RegistrationAPIView(APIView):
-    authentication_classes = []
-    permission_classes = [AllowAny]
+class RegistrationAPIView(VerificationSendAPIView):
 
-    @transaction.atomic
     def post(self, request):
         serializer = RegistrationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = serializer.save()
         try:
-            challenge = issue_verification_code(
-                user,
-                VerificationCode.Purpose.REGISTRATION,
-                enforce_cooldown=False,
-            )
+            # Throttle reservations commit before account/code transactions.
+            with transaction.atomic():
+                user = serializer.save()
+                challenge = issue_verification_code(user, VerificationCode.Purpose.REGISTRATION)
         except VerificationError as exc:
             return verification_error_response(exc)
         return Response(
@@ -183,6 +192,7 @@ class RegistrationAPIView(APIView):
                 "detail": "Təsdiqləmə kodu e-poçtunuza göndərildi.",
                 "email": user.email,
                 "expires_at": challenge.expires_at,
+                "retry_after": settings.AUTH_CODE_RESEND_COOLDOWN_SECONDS,
             },
             status=status.HTTP_201_CREATED,
         )
@@ -231,19 +241,18 @@ class EmailVerificationAPIView(APIView):
     post=extend_schema(
         auth=[],
         request=VerificationResendSerializer,
-        responses={200: AUTH_DELIVERY_SCHEMA},
+        responses={200: AUTH_DELIVERY_SCHEMA, 429: AUTH_DELIVERY_SCHEMA},
     )
 )
-class VerificationResendAPIView(APIView):
-    authentication_classes = []
-    permission_classes = [AllowAny]
+class VerificationResendAPIView(VerificationSendAPIView):
 
     def post(self, request):
         serializer = VerificationResendSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         purpose = serializer.validated_data["purpose"]
         generic_reset_response = {
-            "detail": "Uyğun hesab varsa, yeni kod e-poçta göndərildi."
+            "detail": "Uyğun hesab varsa, yeni kod e-poçta göndərildi.",
+            "retry_after": settings.AUTH_CODE_RESEND_COOLDOWN_SECONDS,
         }
         user_query = User.objects.filter(email=serializer.validated_data["email"])
         if purpose == VerificationCode.Purpose.REGISTRATION:
@@ -261,19 +270,20 @@ class VerificationResendAPIView(APIView):
             return verification_error_response(exc)
         if purpose == VerificationCode.Purpose.PASSWORD_RESET:
             return Response(generic_reset_response)
-        return Response({"detail": "Yeni kod e-poçtunuza göndərildi."})
+        return Response({
+            "detail": "Yeni kod e-poçtunuza göndərildi.",
+            "retry_after": settings.AUTH_CODE_RESEND_COOLDOWN_SECONDS,
+        })
 
 
 @extend_schema_view(
     post=extend_schema(
         auth=[],
         request=PasswordResetRequestSerializer,
-        responses={200: AUTH_DELIVERY_SCHEMA},
+        responses={200: AUTH_DELIVERY_SCHEMA, 429: AUTH_DELIVERY_SCHEMA},
     )
 )
-class PasswordResetRequestAPIView(APIView):
-    authentication_classes = []
-    permission_classes = [AllowAny]
+class PasswordResetRequestAPIView(VerificationSendAPIView):
 
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
@@ -292,7 +302,10 @@ class PasswordResetRequestAPIView(APIView):
                 # Keep this response identical to the unknown-email case.
                 pass
         return Response(
-            {"detail": "Uyğun hesab varsa, bərpa kodu e-poçta göndərildi."}
+            {
+                "detail": "Uyğun hesab varsa, bərpa kodu e-poçta göndərildi.",
+                "retry_after": settings.AUTH_CODE_RESEND_COOLDOWN_SECONDS,
+            }
         )
 
 

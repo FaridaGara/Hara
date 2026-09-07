@@ -309,5 +309,11 @@ LOGIN_TRUSTED_PROXY_CIDRS = get_env_list("LOGIN_TRUSTED_PROXY_CIDRS")
 # Railway mode requires an HTTP-edge-only public ingress; see login-rate-limits.md.
 LOGIN_CLIENT_IP_SOURCE = os.getenv("LOGIN_CLIENT_IP_SOURCE", "trusted-proxy")
 
+# Shared across registration, verification resend and password-reset requests.
+AUTH_SEND_IP_MAX_ATTEMPTS = int(os.getenv("AUTH_SEND_IP_MAX_ATTEMPTS", "20"))
+AUTH_SEND_IP_WINDOW_SECONDS = int(os.getenv("AUTH_SEND_IP_WINDOW_SECONDS", "600"))
+AUTH_SEND_EMAIL_MAX_ATTEMPTS = int(os.getenv("AUTH_SEND_EMAIL_MAX_ATTEMPTS", "5"))
+AUTH_SEND_EMAIL_WINDOW_SECONDS = int(os.getenv("AUTH_SEND_EMAIL_WINDOW_SECONDS", "3600"))
+
 # Bounded cleanup runs on auth traffic in the existing service, without cron.
 AUTH_MAINTENANCE_ENABLED = os.getenv("AUTH_MAINTENANCE_ENABLED", "true").lower() == "true"
