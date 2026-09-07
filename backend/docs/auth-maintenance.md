@@ -30,18 +30,11 @@ daily cron schedule is not configured by this change.
 
 ## Proxy readiness
 
-`manage.py check` now rejects invalid CIDRs and trust-all networks with users.E001
-and users.E002. A Railway deployment with no trusted proxy CIDRs emits users.W001.
-The warning does not invent or automatically trust internal networks.
-
-Before configuring production trust, verify the actual ingress peer ranges and
-how Railway overwrites/appends X-Forwarded-For, including requests with a forged
-client-provided header and any direct/private ingress path. The public edge POP
-identifier or anycast address is not evidence of the application's trusted peer
-CIDR. See https://docs.railway.com/networking/edge-networking.
-
-Until those facts are verified, forwarded values remain ignored. Proxy trust is
-still a deployment follow-up; this PR adds validation, not an unverified allowlist.
+`manage.py check` rejects invalid CIDRs, trust-all networks and invalid client-IP
+source configuration. Railway deployments still using the default peer-based
+identity emit users.W001. The opt-in Railway HTTP-edge mode and its verified
+network boundary are documented in [login rate limits](login-rate-limits.md#railway-http-ingress).
+No proxy ranges are inferred from edge POPs or public anycast addresses.
 
 ## Validation
 
