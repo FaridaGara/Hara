@@ -1,0 +1,51 @@
+name: Backend verification
+on:
+  push:
+    branches: [main, 'fix/**', 'release/**']
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  postgis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: hara
+          POSTGRES_USER: hara
+          POSTGRES_PASSWORD: ci-only-password
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U hara -d hara"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DJANGO_DEBUG: 'false'
+      DJANGO_SECRET_KEY: ci-only-private-to-no-system-testing-key
+      DB_HOST: localhost
+      DB_NAME: hara
+      DB_USER: hara
+      DB_PASSWORD: ci-only-password
+      DB_SSLMODE: ''
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install geographic libraries
+        run: sudo apt-get update && sudo apt-get install -y gdal-bin libgdal-dev libgeos-dev
+      - run: pip install -r requirements.txt
+      - run: python manage.py check
+      - run: python manage.py makemigrations --check --dry-run
+      - run: python manage.py migrate --noinput
+      - name: Full backend tests including PostgreSQL concurrency
+        run: python manage.py test --noinput --verbosity 2
