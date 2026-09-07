@@ -57,7 +57,7 @@ describe("account flow", () => {
     await user.type(screen.getByLabelText("Ad"), "Aysel");
     await user.type(screen.getByLabelText("Soyad"), "Məmmədova");
     await user.type(screen.getByLabelText("E-poçt"), "aysel@example.com");
-    await user.type(screen.getByLabelText("+994 50 756 90 83"), "+994501112233");
+    await user.type(screen.getByLabelText("+994 xx xxx xx xx"), "+994501112233");
     await user.type(screen.getByLabelText("Şifrə"), "SecurePass1");
     await user.type(screen.getByLabelText("Şifrəni təkrarla"), "SecurePass1");
     await user.click(screen.getByRole("checkbox"));
@@ -153,7 +153,7 @@ describe("code send limits", () => {
     render(<AuthProvider><RegistrationForm /></AuthProvider>);
     for (const [label, value] of [
       ["Ad", "Aysel"], ["Soyad", "Test"], ["E-poçt", "test@example.com"],
-      ["+994 50 756 90 83", "+994501112233"], ["Şifrə", "SecurePass1"], ["Şifrəni təkrarla", "SecurePass1"],
+      ["+994 xx xxx xx xx", "+994501112233"], ["Şifrə", "SecurePass1"], ["Şifrəni təkrarla", "SecurePass1"],
     ]) fireEvent.change(screen.getByLabelText(label), { target: { value } });
     fireEvent.click(screen.getByRole("checkbox"));
     const button = screen.getByRole("button", { name: "Qeydiyyatdan keç" }) as HTMLButtonElement;
