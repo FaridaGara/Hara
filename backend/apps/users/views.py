@@ -69,10 +69,13 @@ def resolve_social_user(provider, claims, supplied_first_name="", supplied_last_
         .filter(provider=provider, subject=claims.subject)
         .first()
     )
-    if identity:
-        user = identity.user
-    else:
-        user = User.objects.filter(email=claims.email).first()
+    user = identity.user if identity else User.objects.filter(email=claims.email).first()
+    # Provider email verification must not override the local account status.
+    # Check before linking an identity, updating the profile, or issuing tokens.
+    if user and not user.is_active:
+        raise SocialTokenError("Bu hesabla giriş mümkün deyil.")
+
+    if not identity:
         if user and provider == SocialIdentity.Provider.GOOGLE and not claims.authoritative_email:
             raise SocialTokenError(
                 "Bu email artıq mövcuddur. Əvvəl email və şifrə ilə daxil olun."
@@ -97,7 +100,6 @@ def resolve_social_user(provider, claims, supplied_first_name="", supplied_last_
         ("display_name", display_name),
         ("avatar_url", claims.avatar_url),
         ("is_email_verified", claims.email_verified),
-        ("is_active", True),
     ):
         if value and not getattr(user, field):
             setattr(user, field, value)
