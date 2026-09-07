@@ -31,6 +31,29 @@ cp .env.example .env
 The example values are intended only for local development. Replace the Django
 secret before using the application in any shared or production environment.
 
+For staging and production, set `DJANGO_DEBUG=false` and supply a private,
+random `DJANGO_SECRET_KEY` through the hosting environment. When debug is off
+(the default), startup fails if the key is missing, blank, the example value,
+or starts with `django-insecure-`. The local fallback is available only with
+explicit `DJANGO_DEBUG=true`.
+
+Generate a key locally, then store it in your hosting provider's secret settings:
+
+```bash
+python -c 'import secrets; print(secrets.token_urlsafe(64))'
+```
+
+Do not commit the generated value or paste it into issues or logs. Before
+deploying this change, verify that the hosting environment already has a
+private key. Preserve an existing secure key: changing it can invalidate
+signed tokens and sessions.
+
+The secret configuration regression tests require no database. Run from `backend/`:
+
+```bash
+python -m unittest config.test_secret_key
+```
+
 ## Backend
 
 From the repository root:
