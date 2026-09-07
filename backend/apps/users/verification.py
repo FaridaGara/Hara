@@ -93,31 +93,35 @@ def issue_verification_code(user, purpose, *, enforce_cooldown=True):
     return challenge
 
 
-@transaction.atomic
 def verify_challenge(user, purpose, code, *, consume):
-    challenge = (
-        VerificationCode.objects.select_for_update()
-        .filter(user=user, purpose=purpose, consumed_at__isnull=True)
-        .order_by("-created_at")
-        .first()
-    )
-    now = timezone.now()
-    if not challenge or challenge.expires_at <= now:
-        raise VerificationError("Kodun vaxtı bitib. Yeni kod tələb edin.")
-    if challenge.attempts >= _max_attempts():
-        raise VerificationError("Cəhd limiti bitib. Yeni kod tələb edin.")
-    if not check_password(code, challenge.code_hash):
-        challenge.attempts += 1
-        challenge.save(update_fields=("attempts",))
-        raise VerificationError("Təsdiqləmə kodu yanlışdır.")
+    # Keep the row locked while checking and recording the attempt, but raise
+    # invalid-code errors after this block so its savepoint is not rolled back.
+    # Callers with an outer transaction must handle VerificationError inside it.
+    with transaction.atomic():
+        challenge = (
+            VerificationCode.objects.select_for_update()
+            .filter(user=user, purpose=purpose, consumed_at__isnull=True)
+            .order_by("-created_at")
+            .first()
+        )
+        now = timezone.now()
+        if not challenge or challenge.expires_at <= now:
+            raise VerificationError("Kodun vaxtı bitib. Yeni kod tələb edin.")
+        if challenge.attempts >= _max_attempts():
+            raise VerificationError("Cəhd limiti bitib. Yeni kod tələb edin.")
+        if not check_password(code, challenge.code_hash):
+            challenge.attempts += 1
+            challenge.save(update_fields=("attempts",))
+        else:
+            challenge.verified_at = now
+            update_fields = ["verified_at"]
+            if consume:
+                challenge.consumed_at = now
+                update_fields.append("consumed_at")
+            challenge.save(update_fields=update_fields)
+            return challenge
 
-    challenge.verified_at = now
-    update_fields = ["verified_at"]
-    if consume:
-        challenge.consumed_at = now
-        update_fields.append("consumed_at")
-    challenge.save(update_fields=update_fields)
-    return challenge
+    raise VerificationError("Təsdiqləmə kodu yanlışdır.")
 
 
 def create_password_reset_token(challenge):

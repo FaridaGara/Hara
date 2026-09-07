@@ -452,3 +452,82 @@ class CredentialsAccountFlowTests(APITestCase):
         self.assertEqual(known.status_code, 200)
         self.assertEqual(unknown.status_code, 200)
         self.assertEqual(known.data, unknown.data)
+
+
+    @override_settings(AUTH_CODE_MAX_ATTEMPTS=5)
+    def test_wrong_codes_persist_and_exhaust_limit_for_both_flows(self):
+        for purpose, endpoint in (
+            (VerificationCode.Purpose.REGISTRATION, "auth-verify-email"),
+            (VerificationCode.Purpose.PASSWORD_RESET, "auth-password-reset-verify"),
+        ):
+            with self.subTest(purpose=purpose):
+                user, challenge, code = self.create_attempt_challenge(purpose)
+                wrong_code = "0000" if code != "0000" else "0001"
+                for attempt in range(1, 6):
+                    response = self.client.post(
+                        reverse(endpoint),
+                        {"email": user.email, "code": wrong_code},
+                        format="json",
+                    )
+                    self.assertEqual(response.status_code, 400)
+                    challenge.refresh_from_db()
+                    self.assertEqual(challenge.attempts, attempt)
+
+                response = self.client.post(
+                    reverse(endpoint),
+                    {"email": user.email, "code": code},
+                    format="json",
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertNotIn("access", response.data)
+                self.assertNotIn("reset_token", response.data)
+                challenge.refresh_from_db()
+                self.assertEqual(challenge.attempts, 5)
+                self.assertIsNone(challenge.verified_at)
+                self.assertIsNone(challenge.consumed_at)
+                user.refresh_from_db()
+                self.assertEqual(
+                    user.is_active,
+                    purpose == VerificationCode.Purpose.PASSWORD_RESET,
+                )
+
+    @override_settings(AUTH_CODE_MAX_ATTEMPTS=2)
+    def test_correct_code_succeeds_before_limit_for_both_flows(self):
+        for purpose, endpoint, token_key in (
+            (VerificationCode.Purpose.REGISTRATION, "auth-verify-email", "access"),
+            (VerificationCode.Purpose.PASSWORD_RESET, "auth-password-reset-verify", "reset_token"),
+        ):
+            with self.subTest(purpose=purpose):
+                user, challenge, code = self.create_attempt_challenge(purpose)
+                wrong_code = "0000" if code != "0000" else "0001"
+                response = self.client.post(
+                    reverse(endpoint),
+                    {"email": user.email, "code": wrong_code},
+                    format="json",
+                )
+                self.assertEqual(response.status_code, 400)
+                response = self.client.post(
+                    reverse(endpoint),
+                    {"email": user.email, "code": code},
+                    format="json",
+                )
+                self.assertEqual(response.status_code, 200)
+                self.assertIn(token_key, response.data)
+                challenge.refresh_from_db()
+                self.assertEqual(challenge.attempts, 1)
+                self.assertIsNotNone(challenge.verified_at)
+                self.assertEqual(
+                    challenge.consumed_at is not None,
+                    purpose == VerificationCode.Purpose.REGISTRATION,
+                )
+
+    def create_attempt_challenge(self, purpose):
+        from .verification import issue_verification_code
+
+        user = User.objects.create_user(
+            email=f"attempts-{purpose}@example.com",
+            password="SecurePass1",
+            is_active=purpose == VerificationCode.Purpose.PASSWORD_RESET,
+        )
+        challenge = issue_verification_code(user, purpose)
+        return user, challenge, self.latest_code()
