@@ -424,9 +424,14 @@ class CredentialsAccountFlowTests(APITestCase):
             format="json",
         )
 
+        unknown_payload = {"email": "missing@example.com"}
+        unknown_first = self.client.post(reverse("auth-password-reset-request"), unknown_payload, format="json")
+        unknown_second = self.client.post(reverse("auth-password-reset-request"), unknown_payload, format="json")
         self.assertEqual(first.status_code, 200)
-        self.assertEqual(second.status_code, 200)
-        self.assertEqual(first.data, second.data)
+        self.assertEqual(second.status_code, 429)
+        self.assertEqual(first.data, unknown_first.data)
+        self.assertEqual(second.data, unknown_second.data)
+        self.assertEqual(second["Retry-After"], unknown_second["Retry-After"])
 
     def test_password_reset_resend_does_not_reveal_known_email(self):
         user = User.objects.create_user(
@@ -443,14 +448,18 @@ class CredentialsAccountFlowTests(APITestCase):
             {"email": user.email, "purpose": "password_reset"},
             format="json",
         )
+        self.client.post(
+            reverse("auth-password-reset-request"),
+            {"email": "missing@example.com"}, format="json",
+        )
         unknown = self.client.post(
             reverse("auth-verification-resend"),
             {"email": "missing@example.com", "purpose": "password_reset"},
             format="json",
         )
 
-        self.assertEqual(known.status_code, 200)
-        self.assertEqual(unknown.status_code, 200)
+        self.assertEqual(known.status_code, 429)
+        self.assertEqual(unknown.status_code, 429)
         self.assertEqual(known.data, unknown.data)
 
 

@@ -1,4 +1,5 @@
 import secrets
+import math
 from datetime import timedelta
 
 from django.conf import settings
@@ -17,7 +18,7 @@ class VerificationError(Exception):
 
 class VerificationRateLimited(VerificationError):
     def __init__(self, retry_after):
-        self.retry_after = max(1, int(retry_after))
+        self.retry_after = max(1, math.ceil(retry_after))
         super().__init__("Yeni kod göndərmək üçün bir qədər gözləyin.")
 
 

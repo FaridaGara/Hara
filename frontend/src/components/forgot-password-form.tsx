@@ -4,6 +4,8 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
+import { retryAfterSeconds, useRetryCountdown } from "@/hooks/use-retry-countdown";
+
 import { ApiError, authApi } from "@/lib/api";
 
 import { AuthButton, AuthField, AuthFrame, AuthMessage } from "./auth-ui";
@@ -13,18 +15,22 @@ export function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const retry = useRetryCountdown();
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!email.trim() || submitting) return;
+    if (!email.trim() || submitting || retry.remaining > 0) return;
     setSubmitting(true);
     setError(null);
     try {
-      await authApi.requestPasswordReset(email.trim());
+      const response = await authApi.requestPasswordReset(email.trim());
       router.push(
-        `/verify?purpose=password_reset&email=${encodeURIComponent(email.trim())}`,
+        `/verify?purpose=password_reset&email=${encodeURIComponent(email.trim())}&retry_after=${retryAfterSeconds(response)}`,
       );
     } catch (caughtError) {
+      if (caughtError instanceof ApiError && caughtError.status === 429) {
+        retry.start(retryAfterSeconds(caughtError.payload));
+      }
       setError(
         caughtError instanceof ApiError
           ? caughtError.message
@@ -62,7 +68,8 @@ export function ForgotPasswordForm() {
           disabled={submitting}
         />
         {error ? <AuthMessage>{error}</AuthMessage> : null}
-        <AuthButton type="submit" disabled={submitting || !email.trim()}>
+        {retry.remaining > 0 ? <p role="status" className="text-sm text-[var(--hara-auth-secondary)]">Yenidən cəhd üçün {retry.remaining} saniyə gözləyin.</p> : null}
+        <AuthButton type="submit" disabled={submitting || retry.remaining > 0 || !email.trim()}>
           {submitting ? "Göndərilir…" : "Kodu göndər"}
         </AuthButton>
       </form>

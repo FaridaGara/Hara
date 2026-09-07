@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
+import { retryAfterSeconds, useRetryCountdown } from "@/hooks/use-retry-countdown";
+
 import { ApiError } from "@/lib/api";
 
 import { useAuth } from "./auth-provider";
@@ -22,10 +24,11 @@ export function RegistrationForm() {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const retry = useRetryCountdown();
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (submitting) return;
+    if (submitting || retry.remaining > 0) return;
     if (password !== passwordConfirm) {
       setError("Şifrələr eyni deyil.");
       return;
@@ -45,9 +48,12 @@ export function RegistrationForm() {
       });
       const verificationEmail = response.email || email.trim();
       router.push(
-        `/verify?purpose=registration&email=${encodeURIComponent(verificationEmail)}`,
+        `/verify?purpose=registration&email=${encodeURIComponent(verificationEmail)}&retry_after=${retryAfterSeconds(response)}`,
       );
     } catch (caughtError) {
+      if (caughtError instanceof ApiError && caughtError.status === 429) {
+        retry.start(retryAfterSeconds(caughtError.payload));
+      }
       setError(
         caughtError instanceof ApiError
           ? caughtError.message
@@ -163,7 +169,8 @@ export function RegistrationForm() {
           Şərtlər və qaydaları qəbul edirəm
         </label>
         {error ? <AuthMessage>{error}</AuthMessage> : null}
-        <AuthButton type="submit" disabled={submitting || !valid}>
+        {retry.remaining > 0 ? <p role="status" className="text-sm text-[var(--hara-auth-secondary)]">Yenidən cəhd üçün {retry.remaining} saniyə gözləyin.</p> : null}
+        <AuthButton type="submit" disabled={submitting || retry.remaining > 0 || !valid}>
           {submitting ? "Hesab yaradılır…" : "Qeydiyyatdan keç"}
         </AuthButton>
       </form>

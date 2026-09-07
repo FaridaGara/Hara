@@ -24,6 +24,15 @@ class LoginThrottled(Throttled):
         }
 
 
+class VerificationSendThrottled(Throttled):
+    def __init__(self, wait):
+        super().__init__(wait=wait)
+        self.detail = {
+            "detail": "Kod göndərmə limiti bitib. Göstərilən müddətdən sonra yenidən cəhd edin.",
+            "retry_after": self.wait,
+        }
+
+
 def client_ip(request):
     """Resolve identity using the explicitly configured ingress trust boundary."""
     def parse(value):
@@ -121,6 +130,49 @@ class CredentialsLoginThrottle(BaseThrottle):
             "account", identity, settings.LOGIN_ACCOUNT_MAX_ATTEMPTS,
             settings.LOGIN_ACCOUNT_WINDOW_SECONDS,
         )
+        return not self.retry_after
+
+    def wait(self):
+        return self.retry_after
+
+
+def reserve_verification_send(email):
+    """Reserve an email send slot; a denied cooldown must not spend hourly budget."""
+    with transaction.atomic():
+        wait = consume_attempt(
+            "verification-send-email", email,
+            settings.AUTH_SEND_EMAIL_MAX_ATTEMPTS, settings.AUTH_SEND_EMAIL_WINDOW_SECONDS,
+        )
+        if not wait:
+            wait = consume_attempt(
+                "verification-send-cooldown", email, 1,
+                settings.AUTH_CODE_RESEND_COOLDOWN_SECONDS,
+            )
+        if wait:
+            transaction.set_rollback(True)
+        return wait
+
+
+class VerificationSendThrottle(BaseThrottle):
+    def allow_request(self, request, view):
+        self.retry_after = 0
+        if request.method != "POST":
+            return True
+        # Shared across registration, resend and reset, before any user lookup.
+        self.retry_after = consume_attempt(
+            "verification-send-ip", client_ip(request),
+            settings.AUTH_SEND_IP_MAX_ATTEMPTS, settings.AUTH_SEND_IP_WINDOW_SECONDS,
+        )
+        if self.retry_after:
+            return False
+        data = request.data
+        try:
+            email = serializers.EmailField(max_length=254).run_validation(
+                data.get("email") if hasattr(data, "get") else None,
+            ).strip().casefold()
+        except serializers.ValidationError:
+            return True  # Invalid bodies still spend the IP budget.
+        self.retry_after = reserve_verification_send(email)
         return not self.retry_after
 
     def wait(self):

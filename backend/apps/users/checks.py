@@ -55,3 +55,22 @@ def login_proxy_checks(app_configs, **kwargs):
             id="users.W001",
         ))
     return errors
+
+
+@register()
+def verification_send_checks(app_configs, **kwargs):
+    errors = []
+    for name in (
+        "AUTH_SEND_IP_MAX_ATTEMPTS", "AUTH_SEND_IP_WINDOW_SECONDS",
+        "AUTH_SEND_EMAIL_MAX_ATTEMPTS", "AUTH_SEND_EMAIL_WINDOW_SECONDS",
+        "AUTH_CODE_RESEND_COOLDOWN_SECONDS",
+    ):
+        if getattr(settings, name) <= 0:
+            errors.append(Error(f"{name} must be positive.", id="users.E006"))
+    if settings.DATABASES["default"].get("ATOMIC_REQUESTS", False):
+        errors.append(Error(
+            "Auth request limits require ATOMIC_REQUESTS=False.",
+            hint="Throttle reservations must survive rejected requests and view failures.",
+            id="users.E007",
+        ))
+    return errors
