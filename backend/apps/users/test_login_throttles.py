@@ -149,3 +149,59 @@ class LoginThrottleConcurrencyTests(TransactionTestCase):
         self.assertEqual(waits.count(0), 3)
         self.assertTrue(all(wait > 0 for wait in waits if wait != 0))
         self.assertEqual(LoginRateLimit.objects.get().attempts, 3)
+
+
+@override_settings(LOGIN_CLIENT_IP_SOURCE="railway", LOGIN_TRUSTED_PROXY_CIDRS=[])
+class RailwayClientIpTests(SimpleTestCase):
+    def test_edge_header_is_authoritative_and_canonical(self):
+        for header, expected in [
+            ("192.0.2.1", "192.0.2.1"),
+            (" 2001:0db8:0:0:0:0:0:1 ", "2001:db8::1"),
+            ("::ffff:192.0.2.1", "192.0.2.1"),
+        ]:
+            with self.subTest(header=header):
+                request = RequestFactory().post(
+                    "/", REMOTE_ADDR="10.0.0.2", HTTP_X_REAL_IP=header,
+                    HTTP_X_FORWARDED_FOR="203.0.113.99", HTTP_CF_CONNECTING_IP="203.0.113.98",
+                )
+                self.assertEqual(client_ip(request), expected)
+
+    def test_missing_or_invalid_edge_header_falls_back_only_to_peer(self):
+        for header in ["", "invalid", "192.0.2.1, 192.0.2.2", "192.0.2.1:443",
+                       "[2001:db8::1]", "fe80::1%eth0", "x" * 65]:
+            with self.subTest(header=header):
+                request = RequestFactory().post(
+                    "/", REMOTE_ADDR="10.0.0.2", HTTP_X_REAL_IP=header,
+                    HTTP_X_FORWARDED_FOR="203.0.113.99",
+                )
+                self.assertEqual(client_ip(request), "10.0.0.2")
+
+    @override_settings(LOGIN_CLIENT_IP_SOURCE="trusted-proxy")
+    def test_unconfigured_deployments_ignore_real_ip_header(self):
+        request = RequestFactory().post(
+            "/", REMOTE_ADDR="192.0.2.1", HTTP_X_REAL_IP="203.0.113.99",
+        )
+        self.assertEqual(client_ip(request), "192.0.2.1")
+
+    def test_invalid_peer_is_not_rescued_by_headers(self):
+        request = RequestFactory().post("/", REMOTE_ADDR="invalid", HTTP_X_REAL_IP="192.0.2.1")
+        self.assertEqual(client_ip(request), "unknown")
+
+
+@override_settings(
+    LOGIN_CLIENT_IP_SOURCE="railway", LOGIN_TRUSTED_PROXY_CIDRS=[],
+    LOGIN_IP_MAX_ATTEMPTS=2, LOGIN_ACCOUNT_MAX_ATTEMPTS=10,
+)
+class RailwayLoginBudgetTests(APITestCase):
+    def attempt(self, ip, spoof):
+        # Invalid payloads exercise the IP budget without creating an account.
+        return self.client.post(
+            reverse("auth-login"), {}, format="json", REMOTE_ADDR="10.0.0.2",
+            HTTP_X_REAL_IP=ip, HTTP_X_FORWARDED_FOR=spoof,
+        )
+
+    def test_visitors_behind_one_peer_have_independent_budgets(self):
+        self.assertEqual(self.attempt("192.0.2.1", "203.0.113.1").status_code, 401)
+        self.assertEqual(self.attempt("::ffff:192.0.2.1", "203.0.113.2").status_code, 401)
+        self.assertEqual(self.attempt("192.0.2.1", "203.0.113.3").status_code, 429)
+        self.assertEqual(self.attempt("192.0.2.2", "203.0.113.3").status_code, 401)

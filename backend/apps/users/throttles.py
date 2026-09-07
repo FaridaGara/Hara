@@ -25,8 +25,10 @@ class LoginThrottled(Throttled):
 
 
 def client_ip(request):
-    """Only traverse forwarded addresses supplied by configured trusted peers."""
+    """Resolve identity using the explicitly configured ingress trust boundary."""
     def parse(value):
+        if "%" in value:
+            raise ValueError("Scoped addresses are not client identities")
         address = ip_address(value.strip())
         return getattr(address, "ipv4_mapped", None) or address
 
@@ -34,6 +36,16 @@ def client_ip(request):
         peer = parse(request.META.get("REMOTE_ADDR", ""))
     except ValueError:
         return "unknown"
+    if settings.LOGIN_CLIENT_IP_SOURCE == "railway":
+        # Opt-in only for Railway HTTP ingress: its edge overwrites X-Real-IP.
+        # Do not fall back to another, potentially client-controlled header.
+        real_ip = request.META.get("HTTP_X_REAL_IP", "")
+        if not real_ip or len(real_ip) > 64:
+            return str(peer)
+        try:
+            return str(parse(real_ip))
+        except ValueError:
+            return str(peer)
     networks = [ip_network(value) for value in settings.LOGIN_TRUSTED_PROXY_CIDRS]
 
     def trusted(address):
