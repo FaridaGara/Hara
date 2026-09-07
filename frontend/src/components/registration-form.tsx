@@ -122,7 +122,7 @@ export function RegistrationForm() {
           disabled={submitting}
         />
         <AuthField
-          label="+994 50 756 90 83"
+          label="+994 xx xxx xx xx"
           icon="lock"
           type="tel"
           name="phone_number"
