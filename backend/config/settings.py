@@ -86,6 +86,7 @@ AUTH_USER_MODEL = 'users.User'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'apps.users.maintenance.AuthMaintenanceMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -305,3 +306,6 @@ LOGIN_ACCOUNT_MAX_ATTEMPTS = int(os.getenv("LOGIN_ACCOUNT_MAX_ATTEMPTS", "10"))
 LOGIN_ACCOUNT_WINDOW_SECONDS = int(os.getenv("LOGIN_ACCOUNT_WINDOW_SECONDS", "300"))
 # Empty by default: ignore forwarded headers until deployment peers are verified.
 LOGIN_TRUSTED_PROXY_CIDRS = get_env_list("LOGIN_TRUSTED_PROXY_CIDRS")
+
+# Bounded cleanup runs on auth traffic in the existing service, without cron.
+AUTH_MAINTENANCE_ENABLED = os.getenv("AUTH_MAINTENANCE_ENABLED", "true").lower() == "true"
