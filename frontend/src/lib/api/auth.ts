@@ -1,6 +1,6 @@
-import { clearSession, setSession } from "@/lib/auth/session";
+import { clearSession, getRefreshToken, setSession } from "@/lib/auth/session";
 
-import { apiRequest } from "./client";
+import { ApiError, apiRequest } from "./client";
 import type {
   AuthSessionResponse,
   AuthDeliveryResponse,
@@ -11,6 +11,9 @@ import type {
   UserProfileUpdate,
   VerificationPurpose,
 } from "./contracts";
+
+// Retain failed revocations in memory so the user can retry before closing the page.
+const pendingLogouts = new Set<string>();
 
 export const authApi = {
   async login(identifier: string, password: string) {
@@ -131,7 +134,28 @@ export const authApi = {
     });
   },
 
-  logout() {
+  async logout() {
+    const refresh = getRefreshToken();
+    if (refresh) pendingLogouts.add(refresh);
     clearSession();
+    for (const token of pendingLogouts) {
+      try {
+        await apiRequest<void>("/api/auth/logout/", {
+          method: "POST", auth: "none", body: { refresh: token }, keepalive: true,
+        });
+        pendingLogouts.delete(token);
+      } catch (error) {
+        // An expired/invalid session cannot be refreshed, so local logout suffices.
+        if (error instanceof ApiError && error.status === 401) {
+          pendingLogouts.delete(token);
+        } else {
+          throw error;
+        }
+      }
+    }
   },
 };
+
+export function resetPendingLogoutsForTests() {
+  pendingLogouts.clear();
+}

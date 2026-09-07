@@ -41,12 +41,14 @@ type AuthContextValue = {
   updateProfile: (profile: Partial<UserProfileUpdate>) => Promise<UserProfile>;
   refreshProfile: () => Promise<UserProfile | null>;
   logout: () => void;
+  logoutError: string | null;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("loading");
+  const [logoutError, setLogoutError] = useState<string | null>(null);
   const [user, setUser] = useState<UserProfile | null>(null);
 
   useEffect(() => {
@@ -118,7 +120,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
-    authApi.logout();
+    setLogoutError(null);
+    void authApi.logout().catch(() => {
+      setLogoutError("Bu cihazdan çıxdınız. Sessiyanın bağlanmasını təsdiqləmək üçün yenidən cəhd edin.");
+    });
     setUser(null);
     setStatus("anonymous");
   }, []);
@@ -134,6 +139,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       updateProfile,
       refreshProfile,
       logout,
+      logoutError,
     }),
     [
       status,
@@ -145,6 +151,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       updateProfile,
       refreshProfile,
       logout,
+      logoutError,
     ],
   );
 

@@ -21,9 +21,7 @@ from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularSwaggerView,
 )
-from rest_framework_simplejwt.views import (
-    TokenRefreshView,
-)
+from apps.users.session_views import SessionRefreshAPIView, SessionLogoutAPIView
 from apps.users.views import (
     AppleSocialLoginAPIView,
     CredentialsLoginAPIView,
@@ -138,9 +136,10 @@ urlpatterns = [
         PasswordResetConfirmAPIView.as_view(),
         name="auth-password-reset-confirm",
     ),
+    path("api/auth/logout/", SessionLogoutAPIView.as_view(), name="auth-logout"),
     path(
         "api/auth/refresh/",
-        TokenRefreshView.as_view(),
+        SessionRefreshAPIView.as_view(),
         name="auth-refresh",
     ),
     path(

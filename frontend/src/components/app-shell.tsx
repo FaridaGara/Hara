@@ -14,7 +14,7 @@ const links = [
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { status, logout } = useAuth();
+  const { status, logout, logoutError } = useAuth();
   const usesDiscoveryShell =
     pathname === "/" ||
     pathname === "/map" ||
@@ -103,6 +103,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </nav>
         </div>
       </header> : null}
+      {logoutError ? (
+        <div role="alert" className="relative z-50 mx-auto max-w-3xl bg-amber-100 p-4 text-sm text-amber-950">
+          <p>{logoutError}</p>
+          <button type="button" onClick={logout} className="mt-2 min-h-11 underline">
+            Yenidən cəhd et
+          </button>
+        </div>
+      ) : null}
       {children}
     </div>
   );

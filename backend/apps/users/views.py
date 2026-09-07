@@ -5,8 +5,8 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework_simplejwt.tokens import RefreshToken
 
+from .sessions import issue_session
 from .models import SocialIdentity, User
 from .models import VerificationCode
 from .serializers import (
@@ -55,10 +55,8 @@ PASSWORD_RESET_TOKEN_SCHEMA = inline_serializer(
 
 
 def token_payload(user):
-    refresh = RefreshToken.for_user(user)
     return {
-        "access": str(refresh.access_token),
-        "refresh": str(refresh),
+        **issue_session(user),
         "user": UserProfileSerializer(user).data,
     }
 

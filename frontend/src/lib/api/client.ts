@@ -2,7 +2,8 @@ import {
   clearSession,
   getAccessToken,
   getRefreshToken,
-  setSession,
+  applyRefreshedSession,
+  getSessionVersion,
 } from "@/lib/auth/session";
 
 import type { AuthRefreshResponse } from "./contracts";
@@ -51,6 +52,11 @@ export type ApiRequestOptions = Omit<RequestInit, "body" | "headers"> & {
 };
 
 let refreshPromise: Promise<string> | null = null;
+let refreshVersion = -1;
+
+function sessionChangedError() {
+  return new ApiError({ kind: "cancelled", message: "Sessiya dəyişib. Sorğu dayandırıldı." });
+}
 
 function normalizeBaseUrl(value: string) {
   return value.replace(/\/+$/, "");
@@ -161,7 +167,8 @@ async function parseResponse(response: Response) {
 }
 
 async function refreshAccessToken() {
-  if (refreshPromise) {
+  const version = getSessionVersion();
+  if (refreshPromise && refreshVersion === version) {
     return refreshPromise;
   }
 
@@ -175,6 +182,7 @@ async function refreshAccessToken() {
     });
   }
 
+  refreshVersion = version;
   refreshPromise = (async () => {
     try {
       const response = await fetchWithTimeout(
@@ -197,13 +205,15 @@ async function refreshAccessToken() {
         });
       }
 
-      setSession({ access: payload.access, refresh: payload.refresh });
+      if (!applyRefreshedSession(payload, version)) {
+        throw sessionChangedError();
+      }
       return payload.access;
     } catch (error) {
-      clearSession();
+      if (getSessionVersion() === version) clearSession();
       throw error;
     } finally {
-      refreshPromise = null;
+      if (refreshVersion === version) refreshPromise = null;
     }
   })();
 
@@ -282,6 +292,10 @@ export async function apiRequest<T>(
   options: ApiRequestOptions = {},
 ): Promise<T> {
   const auth = options.auth ?? "optional";
+  const version = getSessionVersion();
+  const ensureCurrentSession = () => {
+    if (auth !== "none" && getSessionVersion() !== version) throw sessionChangedError();
+  };
   let token = auth === "none" ? null : getAccessToken();
 
   if (!token && auth === "required") {
@@ -289,15 +303,22 @@ export async function apiRequest<T>(
   }
 
   try {
-    return await requestOnce<T>(path, options, token);
+    ensureCurrentSession();
+    const result = await requestOnce<T>(path, options, token);
+    ensureCurrentSession();
+    return result;
   } catch (error) {
+    ensureCurrentSession();
     if (
       error instanceof ApiError &&
       error.status === 401 &&
       auth !== "none"
     ) {
       const refreshedToken = await refreshAccessToken();
-      return requestOnce<T>(path, options, refreshedToken);
+      ensureCurrentSession();
+      const result = await requestOnce<T>(path, options, refreshedToken);
+      ensureCurrentSession();
+      return result;
     }
 
     throw error;
