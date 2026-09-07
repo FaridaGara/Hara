@@ -2,6 +2,11 @@ const REFRESH_TOKEN_KEY = "hara.refresh-token";
 const AUTH_EVENT = "hara:auth-change";
 
 let accessToken: string | null = null;
+let sessionVersion = 0;
+
+export function getSessionVersion() {
+  return sessionVersion;
+}
 
 function canUseSessionStorage() {
   return typeof window !== "undefined" && "sessionStorage" in window;
@@ -28,6 +33,20 @@ export function hasSession() {
 }
 
 export function setSession(tokens: { access: string; refresh?: string }) {
+  sessionVersion += 1;
+  storeTokens(tokens);
+}
+
+export function applyRefreshedSession(
+  tokens: { access: string; refresh?: string },
+  expectedVersion: number,
+) {
+  if (sessionVersion !== expectedVersion) return false;
+  storeTokens(tokens);
+  return true;
+}
+
+function storeTokens(tokens: { access: string; refresh?: string }) {
   accessToken = tokens.access;
 
   if (tokens.refresh && canUseSessionStorage()) {
@@ -42,6 +61,7 @@ export function setSession(tokens: { access: string; refresh?: string }) {
 }
 
 export function clearSession() {
+  sessionVersion += 1;
   accessToken = null;
 
   if (canUseSessionStorage()) {

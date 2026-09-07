@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -53,11 +53,13 @@ describe("event detail", () => {
     const { container } = renderDetail({ event });
 
     expect(await screen.findByRole("heading", { name: event.title })).toBeTruthy();
-    expect(screen.getByText(event.venue.address)).toBeTruthy();
+    expect(screen.getByText(`${event.venue.address}, ${event.venue.city}`)).toBeTruthy();
     expect(screen.getByText(/<script>unsafe/)).toBeTruthy();
     expect(container.querySelector("script")).toBeNull();
     expect(screen.getByRole("heading", { name: "Standard" })).toBeTruthy();
-    expect(screen.getByText("20.00 AZN")).toBeTruthy();
+    const ticketCard = screen.getByRole("heading", { name: "Standard" }).closest("section");
+    expect(ticketCard).not.toBeNull();
+    expect(within(ticketCard!).getByText("20.00 AZN")).toBeTruthy();
     expect(screen.getByText("8 bilet qalıb")).toBeTruthy();
   });
 
