@@ -6,13 +6,10 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from .models import User
+from .login_identifiers import find_login_user, normalize_phone
 
 
 PHONE_PATTERN = re.compile(r"^\+994\d{9}$")
-
-
-def normalize_phone(value):
-    return re.sub(r"[\s()\-]", "", value.strip())
 
 
 def validate_new_password(password, *, user=None):
@@ -102,13 +99,7 @@ class CredentialsLoginSerializer(serializers.Serializer):
     password = serializers.CharField(trim_whitespace=False)
 
     def validate(self, attrs):
-        identifier = attrs["identifier"].strip()
-        if "@" in identifier:
-            user = User.objects.filter(email=identifier.casefold()).first()
-        else:
-            phone = normalize_phone(identifier)
-            users = User.objects.filter(phone_number=phone, is_active=True)[:2]
-            user = users[0] if len(users) == 1 else None
+        user = find_login_user(attrs["identifier"])
 
         if not user or not user.is_active or not user.check_password(attrs["password"]):
             raise serializers.ValidationError(

@@ -192,3 +192,12 @@ There are currently no connected API routes for registration, organizer
 profile/verification, a dedicated event publish action, seat reservation,
 refunds, settlements, or Chewick. They are intentionally not represented as
 endpoints in this inventory.
+
+
+## Credential login throttling
+
+`POST /api/auth/login/` is limited by account and client IP. Exceeding either
+budget returns HTTP 429 with `detail`, numeric `retry_after` seconds, and a
+matching `Retry-After` header. Email and phone login share the same known-account
+budget. See [login rate limits](login-rate-limits.md) for defaults, migration,
+proxy trust, cleanup, and rollout requirements.

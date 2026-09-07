@@ -20,6 +20,7 @@ from .serializers import (
     VerificationResendSerializer,
 )
 from .social_auth import SocialTokenError, verify_apple_token, verify_google_token
+from .throttles import CredentialsLoginThrottle, LoginThrottled
 from .verification import (
     VerificationError,
     VerificationRateLimited,
@@ -123,12 +124,25 @@ def verification_error_response(exc):
     post=extend_schema(
         auth=[],
         request=CredentialsLoginSerializer,
-        responses={200: AUTH_SESSION_SCHEMA},
+        responses={
+            200: AUTH_SESSION_SCHEMA,
+            429: inline_serializer(
+                name="LoginRateLimited",
+                fields={
+                    "detail": drf_serializers.CharField(),
+                    "retry_after": drf_serializers.IntegerField(),
+                },
+            ),
+        },
     )
 )
 class CredentialsLoginAPIView(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
+    throttle_classes = [CredentialsLoginThrottle]
+
+    def throttled(self, request, wait):
+        raise LoginThrottled(wait)
 
     def post(self, request):
         serializer = CredentialsLoginSerializer(data=request.data)

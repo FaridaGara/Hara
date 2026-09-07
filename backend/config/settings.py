@@ -285,3 +285,12 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
+
+
+# Shared database-backed limits for credential login requests.
+LOGIN_IP_MAX_ATTEMPTS = int(os.getenv("LOGIN_IP_MAX_ATTEMPTS", "30"))
+LOGIN_IP_WINDOW_SECONDS = int(os.getenv("LOGIN_IP_WINDOW_SECONDS", "60"))
+LOGIN_ACCOUNT_MAX_ATTEMPTS = int(os.getenv("LOGIN_ACCOUNT_MAX_ATTEMPTS", "10"))
+LOGIN_ACCOUNT_WINDOW_SECONDS = int(os.getenv("LOGIN_ACCOUNT_WINDOW_SECONDS", "300"))
+# Empty by default: ignore forwarded headers until deployment peers are verified.
+LOGIN_TRUSTED_PROXY_CIDRS = get_env_list("LOGIN_TRUSTED_PROXY_CIDRS")
