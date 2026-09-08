@@ -7,6 +7,9 @@ import { setSession } from "@/lib/auth/session";
 
 import { AuthProvider, useAuth } from "./auth-provider";
 import { EventWizard } from "./event-wizard";
+import { AppShell } from "./app-shell";
+import { EMPTY_EVENT_DRAFT, readEventDraft, saveEventDraft } from "@/lib/event-draft";
+import { emptySchedule } from "@/lib/event-schedule";
 import { HomeAddButton } from "./home-add-button";
 import { LoginForm } from "./login-form";
 import { ProtectedRoute } from "./protected-route";
@@ -58,10 +61,49 @@ describe("event creation authentication entry", () => {
   it("lets an existing ordinary user open the wizard without organizer privileges", async () => {
     setSession(session);
     vi.spyOn(authApi, "me").mockResolvedValue(profile);
-    render(<AuthProvider><ProtectedRoute><EventWizard /></ProtectedRoute></AuthProvider>);
+    render(<AuthProvider><AppShell><ProtectedRoute><EventWizard /></ProtectedRoute></AppShell></AuthProvider>);
     expect(await screen.findByRole("heading", { name: "Əsas məlumatlar" })).toBeTruthy();
     expect(screen.getByText("Aysel Məmmədova adından")).toBeTruthy();
-    expect(navigation.replace).not.toHaveBeenCalled();
+    expect(navigation.replace).toHaveBeenCalledWith("/create-event?step=1");
+    expect(screen.queryByRole("link", { name: "Hara ana səhifə" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Çıxış" })).toBeNull();
+  });
+
+  it("preserves schedule data through Back, duration edits, and reopening", async () => {
+    setSession(session);
+    vi.spyOn(authApi, "me").mockResolvedValue(profile);
+    saveEventDraft(profile.id, { ...EMPTY_EVENT_DRAFT, title: "Caz", category: "musiqi", description: "Canlı musiqi", duration: "120", lastStep: 2,
+      schedule: { ...emptySchedule(), startDate: "2099-10-28", startTime: "20:00", endDate: "2099-10-28", endTime: "22:00" } });
+    navigation.searchParams = new URLSearchParams("step=2");
+    const tree = () => <AuthProvider><AppShell><ProtectedRoute><EventWizard /></ProtectedRoute></AppShell></AuthProvider>;
+    const view = render(tree());
+    expect(await screen.findByRole("heading", { name: "Tarix və məkan" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Əvvəlki mərhələyə qayıt" }));
+    expect(navigation.push).toHaveBeenCalledWith("/create-event?step=1");
+    navigation.searchParams = new URLSearchParams("step=1");
+    view.rerender(tree());
+    expect((screen.getByLabelText("Tədbirin adı") as HTMLInputElement).value).toBe("Caz");
+    fill("Müddət (dəqiqə)", "180");
+    await userEvent.click(screen.getByRole("button", { name: "Növbəti addım" }));
+    expect(navigation.push).toHaveBeenCalledWith("/create-event?step=2");
+    navigation.searchParams = new URLSearchParams("step=2");
+    view.rerender(tree());
+    expect((screen.getByLabelText("Bitmə saatı") as HTMLInputElement).value).toBe("23:00");
+    expect(readEventDraft(profile.id).lastStep).toBe(2);
+    view.unmount();
+    navigation.searchParams = new URLSearchParams();
+    render(tree());
+    expect(await screen.findByRole("heading", { name: "Tarix və məkan" })).toBeTruthy();
+    expect(navigation.replace).toHaveBeenCalledWith("/create-event?step=2");
+  });
+
+  it("keeps an incomplete draft on step one even with a step two URL", async () => {
+    setSession(session);
+    vi.spyOn(authApi, "me").mockResolvedValue(profile);
+    navigation.searchParams = new URLSearchParams("step=2");
+    render(<AuthProvider><ProtectedRoute><EventWizard /></ProtectedRoute></AuthProvider>);
+    expect(await screen.findByRole("heading", { name: "Əsas məlumatlar" })).toBeTruthy();
+    expect(navigation.replace).toHaveBeenCalledWith("/create-event?step=1");
   });
 
   it("carries the wizard destination through email registration and verification", async () => {

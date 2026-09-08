@@ -46,6 +46,14 @@ class VenueSerializer(serializers.ModelSerializer):
         return obj.location.x if obj.location else None
 
 
+class VenueChoiceSerializer(VenueSerializer):
+    plan_id = serializers.UUIDField(read_only=True, allow_null=True)
+    capacity = serializers.IntegerField(read_only=True, allow_null=True)
+
+    class Meta(VenueSerializer.Meta):
+        fields = VenueSerializer.Meta.fields + ("plan_id", "capacity")
+
+
 class VenueSeatSerializer(serializers.ModelSerializer):
     class Meta:
         model = VenueSeat

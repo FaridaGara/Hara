@@ -76,9 +76,57 @@
 :global(:root[data-theme="dark"]) .nextIcon { filter: brightness(0); }
 .footer p { text-align: center; font-size: 13px; line-height: 18px; color: var(--hara-auth-secondary); }
 .iconButton:focus-visible, .next:focus-visible { outline: 2px solid var(--hara-tab-active); outline-offset: 3px; }
+.iconButton:disabled { opacity: 0.35; cursor: not-allowed; }
+.retry { font-weight: 600; text-decoration: underline; cursor: pointer; }
+.scheduleFields, .venueResults { display: flex; flex-direction: column; gap: 12px; }
+.scheduleFields h2, .venueResults h2 { font-size: 16px; line-height: 21px; font-weight: 600; }
+.dateRow { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(112px, 1fr); gap: 12px; }
+.dateRow input[type="time"] { font-size: 17px; min-width: 0; }
+.dateRow input[type="time"]::-webkit-calendar-picker-indicator { display: none; }
+.dateButton { align-items: stretch; border: 0; text-align: left; cursor: pointer; }
+.dateButton > span:nth-child(2) { font-size: 17px; line-height: 22px; letter-spacing: -0.43px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dateButton:focus-visible, .venueResult:focus-visible, .fixTime:focus-visible { outline: 2px solid var(--hara-tab-active); outline-offset: 2px; }
+.hint { font-size: 13px; line-height: 18px; color: var(--hara-auth-secondary); }
+.venueDetails { display: flex; flex-direction: column; gap: 4px; font-size: 13px; line-height: 18px; color: var(--hara-auth-secondary); }
+.venueDetails small { font-size: 12px; line-height: 16px; }
+.accent { color: var(--hara-tab-active); font-weight: 500; }
+.venueResult { display: flex; align-items: center; gap: 16px; width: 100%; border: 0; border-radius: 16px; padding: 16px; background: var(--hara-auth-field); color: var(--hara-auth-text); text-align: left; cursor: pointer; }
+.venueResult > span { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.venueResult > img { flex: none; }
+.venueResult strong { font-size: 16px; line-height: 21px; font-weight: 600; }
+.venueResult span span { font-size: 13px; line-height: 18px; color: var(--hara-auth-secondary); }
+.venueResult small { font-size: 12px; line-height: 16px; color: var(--hara-tab-active); }
+.secondary, .fixTime { background: color-mix(in srgb, var(--hara-tab-active) 12%, transparent); color: var(--hara-tab-active); }
+.fixTime { border: 0; border-radius: 16px; min-height: 40px; padding: 8px 12px; font-weight: 600; cursor: pointer; }
+.fieldInvalid { background: color-mix(in srgb, #ff2c3d 22%, var(--hara-auth-page)); }
+.timeError { font-size: 13px; line-height: 18px; color: #ff2c3d; }
+.scheduleNext:disabled { opacity: 1; background: #b2b2b2; color: #ffffff61; }
+.scheduleNext:disabled .nextIcon { filter: brightness(0) invert(1); opacity: 0.38; }
+.dateDialog { display: none; position: fixed; inset: auto 0 0; margin: 0 auto; width: 100%; max-width: 402px; max-height: calc(100dvh - var(--hara-safe-top) - 16px); overflow: auto; border: 0; border-radius: 32px 32px 0 0; padding: 16px 16px calc(24px + var(--hara-safe-bottom)); background: var(--hara-auth-page); color: var(--hara-auth-text); }
+.dateDialog[open] { display: flex; flex-direction: column; gap: 12px; }
+.dateDialog::backdrop { background: #00000080; }
+.pickerHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.pickerHeader h2 { font-size: 20px; line-height: 25px; font-weight: 600; }
+.monthHeader { display: flex; align-items: center; gap: 8px; }
+.monthHeader h3 { flex: 1; font-size: 17px; line-height: 22px; font-weight: 600; text-transform: capitalize; }
+.calendar { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; text-align: center; }
+.weekday { font-size: 12px; line-height: 16px; color: var(--hara-auth-secondary); padding-block: 6px; }
+.calendar button { min-width: 0; min-height: 40px; border: 0; border-radius: 10px; background: transparent; color: var(--hara-auth-text); font-size: 16px; font-weight: 600; cursor: pointer; }
+.calendar button[data-outside="true"], .calendar button:disabled { color: var(--hara-auth-muted); }
+.calendar button:disabled { cursor: not-allowed; }
+.calendar button[aria-pressed="true"] { background: var(--hara-weekly-price); color: var(--hara-weekly-price-text); }
+.calendar button:focus-visible { outline: 2px solid var(--hara-tab-active); outline-offset: -2px; }
+.dateDialog .next { flex: none; height: 48px; }
+.venueMap { position: relative; height: 144px; overflow: hidden; border-radius: 24px; background: var(--hara-auth-field); }
+.venueMap + .hint { margin-top: 8px; font-size: 12px; line-height: 16px; }
+.mapCanvas { position: absolute; inset: 0; }
+.mapPin { display: grid; place-items: center; width: 36px; height: 36px; border: 2px solid white; border-radius: 50%; background: var(--hara-tab-active); box-shadow: 0 2px 8px #00000040; }
+:global(:root[data-theme="dark"]) .mapPin img { filter: brightness(0); }
+.mapNotice { position: absolute; inset: 8px 8px auto; border-radius: 12px; padding: 8px 12px; font-size: 12px; line-height: 16px; background: var(--hara-auth-page); color: var(--hara-auth-text); }
 
 @media (prefers-color-scheme: dark) {
   :global(:root:not([data-theme])) .nextIcon { filter: brightness(0); }
+  :global(:root:not([data-theme])) .mapPin img { filter: brightness(0); }
 }
 
 @media (min-width: 640px) {
