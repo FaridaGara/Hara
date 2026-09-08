@@ -1,0 +1,125 @@
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { authApi } from "@/lib/api";
+import { setSession } from "@/lib/auth/session";
+
+import { AuthProvider, useAuth } from "./auth-provider";
+import { EventWizard } from "./event-wizard";
+import { HomeAddButton } from "./home-add-button";
+import { LoginForm } from "./login-form";
+import { ProtectedRoute } from "./protected-route";
+import { RegistrationForm } from "./registration-form";
+import { VerificationForm } from "./verification-form";
+
+const navigation = vi.hoisted(() => ({
+  replace: vi.fn(), push: vi.fn(), pathname: "/create-event",
+  searchParams: new URLSearchParams(),
+}));
+vi.mock("next/navigation", () => ({
+  useRouter: () => navigation,
+  usePathname: () => navigation.pathname,
+  useSearchParams: () => navigation.searchParams,
+}));
+
+const profile = {
+  id: 7, email: "aysel@example.com", display_name: "Aysel Məmmədova",
+  first_name: "Aysel", last_name: "Məmmədova", phone_number: "+994507891234",
+  avatar_url: "", birth_date: null, interests: [], account_type: "user" as const,
+  role: "user" as const, providers: [], is_email_verified: true,
+};
+const session = { access: "test-access", refresh: "test-refresh", user: profile };
+
+beforeEach(() => {
+  navigation.pathname = "/create-event";
+  navigation.searchParams = new URLSearchParams();
+  window.localStorage.clear();
+});
+
+function fill(label: string, value: string) {
+  fireEvent.change(screen.getByLabelText(label), { target: { value } });
+}
+
+// Exercise the same AuthProvider social completion used by the Google SDK callback.
+function GoogleCompletion() {
+  const { socialLogin } = useAuth();
+  return <button onClick={() => void socialLogin("google", "test-google-credential")}>Complete Google sign-in</button>;
+}
+
+describe("event creation authentication entry", () => {
+  it("links the home action to a protected wizard and does not expose the form before sign-in", async () => {
+    render(<AuthProvider><HomeAddButton /><ProtectedRoute><EventWizard /></ProtectedRoute></AuthProvider>);
+    expect(screen.getByRole("link", { name: "Tədbir əlavə et" }).getAttribute("href")).toBe("/create-event");
+    expect(screen.queryByLabelText("Tədbirin adı")).toBeNull();
+    await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith("/login?next=%2Fcreate-event"));
+  });
+
+  it("lets an existing ordinary user open the wizard without organizer privileges", async () => {
+    setSession(session);
+    vi.spyOn(authApi, "me").mockResolvedValue(profile);
+    render(<AuthProvider><ProtectedRoute><EventWizard /></ProtectedRoute></AuthProvider>);
+    expect(await screen.findByRole("heading", { name: "Əsas məlumatlar" })).toBeTruthy();
+    expect(screen.getByText("Aysel Məmmədova adından")).toBeTruthy();
+    expect(navigation.replace).not.toHaveBeenCalled();
+  });
+
+  it("carries the wizard destination through email registration and verification", async () => {
+    navigation.searchParams = new URLSearchParams("next=%2Fcreate-event");
+    vi.spyOn(authApi, "register").mockResolvedValue({ detail: "Sent", email: profile.email, retry_after: 60 });
+    vi.spyOn(authApi, "verifyEmail").mockResolvedValue(session);
+    const view = render(<AuthProvider><LoginForm /></AuthProvider>);
+    const registrationHref = screen.getByRole("link", { name: "Qeydiyyatdan keç" }).getAttribute("href")!;
+    expect(registrationHref).toBe("/register?next=%2Fcreate-event");
+    navigation.searchParams = new URL(registrationHref, "https://hara.test").searchParams;
+    view.rerender(<AuthProvider><RegistrationForm /></AuthProvider>);
+    expect(screen.getByRole("link", { name: "Daxil ol" }).getAttribute("href")).toBe("/login?next=%2Fcreate-event");
+    fill("Ad", "Aysel"); fill("Soyad", "Məmmədova"); fill("E-poçt", profile.email);
+    fill("Telefon nömrəsi", "507891234"); fill("Şifrə", "ExamplePass9"); fill("Şifrəni təkrarla", "ExamplePass9");
+    await userEvent.click(screen.getByRole("checkbox"));
+    await userEvent.click(screen.getByRole("button", { name: "Qeydiyyatdan keç" }));
+    await waitFor(() => expect(navigation.push).toHaveBeenCalledOnce());
+    const verificationUrl = new URL(navigation.push.mock.calls[0][0], "https://hara.test");
+    expect(verificationUrl.pathname).toBe("/verify");
+    expect(verificationUrl.searchParams.get("next")).toBe("/create-event");
+    expect(verificationUrl.searchParams.get("email")).toBe(profile.email);
+    navigation.searchParams = verificationUrl.searchParams;
+    view.rerender(<AuthProvider><VerificationForm /></AuthProvider>);
+    expect(screen.getByRole("link", { name: "Geri qayıt" }).getAttribute("href")).toBe("/register?next=%2Fcreate-event");
+    for (let i = 1; i <= 4; i++) fill(`Kodun ${i}-ci rəqəmi`, String(i));
+    await userEvent.click(screen.getByRole("button", { name: "Təsdiq et" }));
+    await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith("/create-event"));
+    navigation.searchParams = new URLSearchParams();
+    view.rerender(<AuthProvider><ProtectedRoute><EventWizard /></ProtectedRoute></AuthProvider>);
+    expect(await screen.findByRole("heading", { name: "Əsas məlumatlar" })).toBeTruthy();
+  });
+
+  it("returns to the wizard after Google sign-in completes", async () => {
+    navigation.searchParams = new URLSearchParams("next=%2Fcreate-event");
+    const social = vi.spyOn(authApi, "socialLogin").mockResolvedValue(session);
+    render(<AuthProvider><LoginForm /><GoogleCompletion /></AuthProvider>);
+    await userEvent.click(screen.getByRole("button", { name: "Complete Google sign-in" }));
+    expect(social).toHaveBeenCalledWith("google", "test-google-credential", undefined, undefined);
+    await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith("/create-event"));
+  });
+
+  it("keeps failed verification on the same screen with its return destination", async () => {
+    navigation.searchParams = new URLSearchParams("purpose=registration&email=aysel%40example.com&next=%2Fcreate-event");
+    vi.spyOn(authApi, "verifyEmail").mockRejectedValue(new Error("invalid code"));
+    render(<AuthProvider><VerificationForm /></AuthProvider>);
+    for (let i = 1; i <= 4; i++) fill(`Kodun ${i}-ci rəqəmi`, String(i));
+    await userEvent.click(screen.getByRole("button", { name: "Təsdiq et" }));
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(navigation.replace).not.toHaveBeenCalled();
+    expect(navigation.searchParams.get("next")).toBe("/create-event");
+  });
+
+  it("rejects an external return destination after verification", async () => {
+    navigation.searchParams = new URLSearchParams("purpose=registration&email=aysel%40example.com&next=%2F%2Fevil.example");
+    vi.spyOn(authApi, "verifyEmail").mockResolvedValue(session);
+    render(<AuthProvider><VerificationForm /></AuthProvider>);
+    for (let i = 1; i <= 4; i++) fill(`Kodun ${i}-ci rəqəmi`, String(i));
+    await userEvent.click(screen.getByRole("button", { name: "Təsdiq et" }));
+    await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith("/"));
+  });
+});
