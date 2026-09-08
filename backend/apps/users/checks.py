@@ -74,3 +74,12 @@ def verification_send_checks(app_configs, **kwargs):
             id="users.E007",
         ))
     return errors
+
+
+@register()
+def social_login_checks(app_configs, **kwargs):
+    return [
+        Error(f"{name} must be positive.", id="users.E008")
+        for name in ("SOCIAL_LOGIN_IP_MAX_ATTEMPTS", "SOCIAL_LOGIN_IP_WINDOW_SECONDS")
+        if getattr(settings, name) <= 0
+    ]

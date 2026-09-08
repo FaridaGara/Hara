@@ -304,6 +304,9 @@ LOGIN_IP_MAX_ATTEMPTS = int(os.getenv("LOGIN_IP_MAX_ATTEMPTS", "30"))
 LOGIN_IP_WINDOW_SECONDS = int(os.getenv("LOGIN_IP_WINDOW_SECONDS", "60"))
 LOGIN_ACCOUNT_MAX_ATTEMPTS = int(os.getenv("LOGIN_ACCOUNT_MAX_ATTEMPTS", "10"))
 LOGIN_ACCOUNT_WINDOW_SECONDS = int(os.getenv("LOGIN_ACCOUNT_WINDOW_SECONDS", "300"))
+# Separate IP budget shared by Google and Apple token verification requests.
+SOCIAL_LOGIN_IP_MAX_ATTEMPTS = int(os.getenv("SOCIAL_LOGIN_IP_MAX_ATTEMPTS", "10"))
+SOCIAL_LOGIN_IP_WINDOW_SECONDS = int(os.getenv("SOCIAL_LOGIN_IP_WINDOW_SECONDS", "60"))
 # Empty by default: ignore forwarded headers until deployment peers are verified.
 LOGIN_TRUSTED_PROXY_CIDRS = get_env_list("LOGIN_TRUSTED_PROXY_CIDRS")
 # Railway mode requires an HTTP-edge-only public ingress; see login-rate-limits.md.
