@@ -1,4 +1,4 @@
-from django.db.models import Prefetch, Q
+from django.db.models import OuterRef, Prefetch, Q, Subquery, Sum
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.utils import (
@@ -9,6 +9,7 @@ from drf_spectacular.utils import (
 )
 from rest_framework import status
 from rest_framework.filters import OrderingFilter, SearchFilter
+from rest_framework.exceptions import ValidationError
 from rest_framework.generics import (
     ListAPIView,
     ListCreateAPIView,
@@ -45,7 +46,35 @@ from .serializers import (
     OrganizerEventSerializer,
     OrganizerVenueSerializer,
     VenuePlanSerializer,
+    VenueChoiceSerializer,
 )
+
+
+class VenueChoiceListAPIView(ListAPIView):
+    """Read-only catalogue for the signed-in event wizard; no admin fields."""
+    serializer_class = VenueChoiceSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = None
+
+    def get_queryset(self):
+        search = self.request.query_params.get("search", "").strip()
+        if len(search) > 128:
+            raise ValidationError({"search": "Axtarış 128 simvoldan uzun ola bilməz."})
+        plans = VenuePlan.objects.filter(
+            venue_id=OuterRef("pk"), status=VenuePlan.Status.PUBLISHED,
+        ).order_by("-is_default", "-version", "id")
+        plans = plans.annotate(
+            total_capacity=Sum("sections__capacity", filter=Q(sections__is_active=True)),
+        )
+        venues = Venue.objects.filter(is_active=True)
+        if search:
+            venues = venues.filter(
+                Q(name__icontains=search) | Q(address__icontains=search) | Q(city__icontains=search),
+            )
+        return venues.annotate(
+            plan_id=Subquery(plans.values("id")[:1]),
+            capacity=Subquery(plans.values("total_capacity")[:1]),
+        ).order_by("name", "id")[:20]
 
 
 @extend_schema_view(

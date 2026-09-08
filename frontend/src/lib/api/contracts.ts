@@ -13,6 +13,11 @@ export type EventVenue = {
   longitude: number | null;
 };
 
+export type VenueChoice = EventVenue & {
+  plan_id: string | null;
+  capacity: number | null;
+};
+
 export type HaraEvent = {
   id: string;
   title: string;

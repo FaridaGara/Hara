@@ -45,6 +45,7 @@ from events.views import (
     OrganizerFollowAPIView,
     OrganizerEventDetailAPIView,
     OrganizerEventListCreateAPIView,
+    VenueChoiceListAPIView,
 )
 from ticketing.views import (
     OrderCancelAPIView,
@@ -81,6 +82,7 @@ urlpatterns = [
     ),
     path("api/", include("apps.core.urls")),
     path("api/events/", include("events.urls")),
+    path("api/venues/", VenueChoiceListAPIView.as_view(), name="venue-choice-list"),
     path(
         "api/favorites/",
         FavoriteListCreateAPIView.as_view(),

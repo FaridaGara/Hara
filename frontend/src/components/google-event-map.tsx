@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { HaraEvent } from "@/lib/api";
+import { loadGoogleMaps } from "@/lib/google-maps-loader";
 
 const BAKU_CENTER = { lat: 40.4093, lng: 49.8671 };
 const DEFAULT_ZOOM = 12;
@@ -18,8 +19,6 @@ type GoogleEventMapProps = {
 };
 
 type MapStatus = "loading" | "ready" | "error";
-
-let configuredApiKey: string | null = null;
 
 export function eventCoordinates(event: HaraEvent) {
   const { latitude, longitude } = event.venue;
@@ -126,22 +125,8 @@ export function GoogleEventMap({
 
     let cancelled = false;
 
-    import("@googlemaps/js-api-loader")
+    loadGoogleMaps(apiKey)
       .then(async (loader) => {
-        if (configuredApiKey && configuredApiKey !== apiKey) {
-          throw new Error("Google Maps API artıq başqa açarla başladılıb.");
-        }
-
-        if (!configuredApiKey) {
-          loader.setOptions({
-            key: apiKey,
-            v: "weekly",
-            language: "az",
-            region: "AZ",
-          });
-          configuredApiKey = apiKey;
-        }
-
         const { Map } = await loader.importLibrary("maps");
         await loader.importLibrary("marker");
         if (cancelled) return;

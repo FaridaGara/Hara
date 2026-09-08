@@ -24,6 +24,78 @@ from .models import (
 )
 
 
+class VenueChoiceAPITests(APITestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = get_user_model().objects.create_user(
+            email="venue-choice@example.com", password="StrongPass123!", account_type="user",
+        )
+        cls.venue = Venue.objects.create(
+            name="Caz salonu", address="Sahil küçəsi", city="Bakı",
+            location=Point(49.84, 40.37, srid=4326), created_by=cls.user,
+        )
+        cls.draft_venue = Venue.objects.create(
+            name="Draft plan venue", address="Other address", city="Şəki",
+            location=Point(47.17, 41.2, srid=4326),
+        )
+        Venue.objects.create(
+            name="Hidden venue", address="Hidden", is_active=False,
+            location=Point(49.84, 40.37, srid=4326),
+        )
+        cls.plan = VenuePlan.objects.create(
+            venue=cls.venue, name="Main", status=VenuePlan.Status.PUBLISHED, is_default=True,
+        )
+        VenuePlan.objects.create(venue=cls.venue, name="Newer", status=VenuePlan.Status.PUBLISHED)
+        VenuePlan.objects.create(venue=cls.venue, name="Unpublished")
+        VenuePlan.objects.create(venue=cls.draft_venue, name="Private draft")
+        VenueSection.objects.create(venue_plan=cls.plan, code="A", name="Floor", capacity=100)
+        VenueSection.objects.create(venue_plan=cls.plan, code="B", name="Balcony", capacity=20)
+        VenueSection.objects.create(venue_plan=cls.plan, code="C", name="Closed", capacity=50, is_active=False)
+
+    def setUp(self):
+        self.url = reverse("venue-choice-list")
+        self.client.force_authenticate(self.user)
+
+    def test_requires_authentication_and_is_read_only(self):
+        self.client.force_authenticate(None)
+        self.assertEqual(self.client.get(self.url).status_code, status.HTTP_401_UNAUTHORIZED)
+        self.client.force_authenticate(self.user)
+        self.assertEqual(self.client.post(self.url, {}, format="json").status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def test_ordinary_user_gets_only_active_venues_and_published_default_plan(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 2)
+        venue = next(item for item in response.data if item["id"] == str(self.venue.id))
+        self.assertEqual(venue["plan_id"], str(self.plan.id))
+        self.assertEqual(venue["capacity"], 120)
+        self.assertEqual(venue["latitude"], 40.37)
+        self.assertEqual(venue["longitude"], 49.84)
+        self.assertEqual(set(venue), {"id", "name", "city", "address", "latitude", "longitude", "plan_id", "capacity"})
+        draft = next(item for item in response.data if item["id"] == str(self.draft_venue.id))
+        self.assertIsNone(draft["plan_id"])
+        self.assertIsNone(draft["capacity"])
+
+    def test_searches_name_address_and_city(self):
+        for search, expected in [("caz", self.venue), ("Sahil", self.venue), ("Şəki", self.draft_venue)]:
+            with self.subTest(search=search):
+                response = self.client.get(self.url, {"search": search})
+                self.assertEqual([item["id"] for item in response.data], [str(expected.id)])
+        self.assertEqual(self.client.get(self.url, {"search": "no matching venue"}).data, [])
+
+    def test_bounds_query_length_and_result_count(self):
+        self.assertEqual(self.client.get(self.url, {"search": "x" * 129}).status_code, status.HTTP_400_BAD_REQUEST)
+        Venue.objects.bulk_create([
+            Venue(name=f"Limit venue {index:02d}", address="Address", location=Point(49.84, 40.37, srid=4326))
+            for index in range(25)
+        ])
+        response = self.client.get(self.url, {"search": "Limit venue"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 20)
+        self.assertEqual(response.data[0]["name"], "Limit venue 00")
+        self.assertEqual(response.data[-1]["name"], "Limit venue 19")
+
+
 class FavoriteAPITests(APITestCase):
     @classmethod
     def setUpTestData(cls):

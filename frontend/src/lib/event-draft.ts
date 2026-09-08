@@ -1,4 +1,6 @@
-// First-step drafts stay on this device until the remaining creation flow is ready.
+import { emptySchedule, readSchedule, type EventSchedule } from "./event-schedule";
+
+// Drafts stay on this device until the remaining creation flow is ready.
 // Category slugs follow the existing discovery filters; no event is published here.
 export const EVENT_CATEGORIES = [
   ["musiqi", "Musiqi"], ["teatr", "Teatr"], ["workshop", "Workshop"], ["idman", "İdman"],
@@ -15,19 +17,22 @@ export type EventDraft = {
   age: string;
   language: string;
   duration: string;
+  schedule: EventSchedule;
+  lastStep: 1 | 2;
 };
 
 export const EMPTY_EVENT_DRAFT: EventDraft = {
   title: "", category: "", description: "", age: "", language: "", duration: "",
+  schedule: emptySchedule(), lastStep: 1,
 };
 
 function draftKey(userId: number) {
-  return `hara.event-draft.v1:${userId}`;
+  return `hara.event-draft.v2:${userId}`;
 }
 
 export function readEventDraft(userId: number): EventDraft {
   try {
-    const value: unknown = JSON.parse(window.localStorage.getItem(draftKey(userId)) || "null");
+    const value: unknown = JSON.parse(window.localStorage.getItem(draftKey(userId)) || window.localStorage.getItem(`hara.event-draft.v1:${userId}`) || "null");
     if (!value || typeof value !== "object" || Array.isArray(value)) return { ...EMPTY_EVENT_DRAFT };
     const draft = value as Record<string, unknown>;
     const text = (key: string, max: number) => typeof draft[key] === "string" ? draft[key].slice(0, max) : "";
@@ -38,6 +43,7 @@ export function readEventDraft(userId: number): EventDraft {
       age: EVENT_AGES.some((age) => age === draft.age) ? String(draft.age) : "",
       language: EVENT_LANGUAGES.some(([id]) => id === draft.language) ? String(draft.language) : "",
       duration: typeof draft.duration === "string" && /^\d{0,5}$/.test(draft.duration) ? draft.duration : "",
+      schedule: readSchedule(draft.schedule), lastStep: draft.lastStep === 2 ? 2 : 1,
     };
   } catch {
     return { ...EMPTY_EVENT_DRAFT };

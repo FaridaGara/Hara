@@ -1,23 +1,22 @@
 "use client";
 
-import Image from "next/image";
-import Link from "next/link";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, type FormEvent, type ReactNode } from "react";
 
 import type { UserProfile } from "@/lib/api";
 import {
   EVENT_AGES, EVENT_CATEGORIES, EVENT_LANGUAGES,
-  isEventDraftComplete, readEventDraft, saveEventDraft, type EventDraft,
+  isEventDraftComplete, type EventDraft,
 } from "@/lib/event-draft";
+import { suggestedEnd } from "@/lib/event-schedule";
+import { useEventDraft } from "@/hooks/use-event-draft";
 
 import { useAuth } from "./auth-provider";
 import { AuthMessage } from "./auth-ui";
 import { PageLoader } from "./states";
+import { WizardFrame, WizardIcon, WizardProgress } from "./event-wizard-layout";
+import { EventDateVenueStep } from "./event-date-venue-step";
 import styles from "./event-wizard.module.css";
-
-function WizardIcon({ name, className = "hara-auth-icon" }: { name: string; className?: string }) {
-  return <Image src={`/figma/create-event/${name}.svg`} alt="" width={24} height={24} className={className} />;
-}
 
 function SelectField({ label, children, value, onChange, required = false }: {
   label: string; children: ReactNode; value: string;
@@ -35,25 +34,24 @@ function SelectField({ label, children, value, onChange, required = false }: {
   );
 }
 
-// This increment implements step 1. The date/location step connects this callback next.
 export function EventDetailsStep({ user, onNext }: {
   user: UserProfile; onNext?: (draft: EventDraft) => void;
 }) {
-  const [draft, setDraft] = useState(() => readEventDraft(user.id));
-  const [notice, setNotice] = useState<string | null>(null);
-  const [storageError, setStorageError] = useState(false);
+  const state = useEventDraft(user.id);
+  return <EventDetailsForm user={user} onNext={onNext} {...state} />;
+}
+
+function EventDetailsForm({ user, onNext, draft, replaceDraft, save, notice, storageError }: {
+  user: UserProfile; onNext?: (draft: EventDraft) => void;
+} & ReturnType<typeof useEventDraft>) {
 
   function update<K extends keyof EventDraft>(key: K, value: EventDraft[K]) {
     const nextDraft = { ...draft, [key]: value };
-    setDraft(nextDraft);
-    setNotice(null);
-    setStorageError(!saveEventDraft(user.id, nextDraft));
-  }
-
-  function save() {
-    const saved = saveEventDraft(user.id, draft);
-    setStorageError(!saved);
-    setNotice(saved ? "Qaralama bu brauzerdə saxlanıldı." : null);
+    if (key === "duration" && !draft.schedule.endEdited) {
+      const end = suggestedEnd(draft.schedule, String(value));
+      if (end) nextDraft.schedule = { ...draft.schedule, ...end };
+    }
+    replaceDraft(nextDraft);
   }
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -66,29 +64,10 @@ export function EventDetailsStep({ user, onNext }: {
   const displayName = user.display_name || [user.first_name, user.last_name].filter(Boolean).join(" ");
 
   return (
-    <main className={`hara-auth ${styles.page}`}>
-      <section className={styles.shell} aria-label="Tədbir yarat">
-        <header className={styles.header}>
-          <Link href="/" aria-label="Tədbir formasını bağla" className={styles.iconButton}>
-            <WizardIcon name="close" />
-          </Link>
-          <div className={styles.heading}>
-            <p>Tədbir yarat</p>
-            <span>{displayName ? `${displayName} adından` : "Öz adından"}</span>
-          </div>
-          <button type="button" aria-label="Qaralamanı bu brauzerdə saxla" className={styles.iconButton} onClick={save}>
-            <WizardIcon name="save" />
-          </button>
-        </header>
-
-        <form onSubmit={submit} className={styles.form}>
+    <WizardFrame subtitle={displayName ? `${displayName} adından` : "Öz adından"} onSave={() => save()}>
+        <form onSubmit={submit} onBlurCapture={() => save(false)} className={styles.form}>
           <div className={styles.content}>
-            <div className={styles.progress}>
-              <p>Addım 1 / 5</p>
-              <div role="progressbar" aria-label="Tədbir yaratma mərhələsi" aria-valuemin={0} aria-valuemax={5} aria-valuenow={1}>
-                <span />
-              </div>
-            </div>
+            <WizardProgress step={1} />
             <div className={styles.introduction}>
               <h1>Əsas məlumatlar</h1>
               <p>Tədbirini qısa və aydın təsvir et.</p>
@@ -113,12 +92,12 @@ export function EventDetailsStep({ user, onNext }: {
                 <SelectField label="Yaş həddi" value={draft.age} onChange={(value) => update("age", value)}>
                   {EVENT_AGES.map((age) => <option key={age}>{age}</option>)}
                 </SelectField>
-                <SelectField label="Dil" value={draft.language} onChange={(value) => update("language", value)}>
+                <SelectField label="Tədbirin dili" value={draft.language} onChange={(value) => update("language", value)}>
                   {EVENT_LANGUAGES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
                 </SelectField>
               </div>
               <label className={styles.field}>
-                <span>Müddət</span>
+                <span>Müddət (istəyə bağlı)</span>
                 <span className={styles.duration}>
                   <input aria-label="Müddət (dəqiqə)" name="duration" inputMode="numeric" maxLength={5} pattern="[0-9]+" placeholder="120" value={draft.duration} onChange={(event) => update("duration", event.target.value.replace(/\D/g, "").slice(0, 5))} />
                   <span>dəqiqə</span>
@@ -126,7 +105,7 @@ export function EventDetailsStep({ user, onNext }: {
               </label>
             </div>
             <p className={styles.required}>* işarəli sahələri doldurmaq mütləqdir.</p>
-            {storageError ? <AuthMessage>Qaralama saxlanılmadı. Məlumatları itirməmək üçün bu səhifəni açıq saxlayın.</AuthMessage> : null}
+            {storageError ? <AuthMessage>Qaralama saxlanılmadı. <button type="button" className={styles.retry} onClick={() => save()}>Yenidən cəhd et</button></AuthMessage> : null}
             {notice ? <AuthMessage tone="success">{notice}</AuthMessage> : null}
           </div>
           <footer className={styles.footer}>
@@ -136,14 +115,37 @@ export function EventDetailsStep({ user, onNext }: {
             <p id="event-next-step">Növbəti: Tarix və məkan</p>
           </footer>
         </form>
-      </section>
-    </main>
+    </WizardFrame>
   );
+}
+
+function AccountEventWizard({ user }: { user: UserProfile }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const state = useEventDraft(user.id);
+  const requested = searchParams.get("step");
+  const wantsSecond = requested === "2" || (!requested && state.draft.lastStep === 2);
+  const step = wantsSecond && isEventDraftComplete(state.draft) ? 2 : 1;
+
+  useEffect(() => {
+    // Canonical URLs let browser Back work as well as the wizard's own Back button.
+    if (requested !== String(step)) router.replace(`/create-event?step=${step}`);
+  }, [requested, router, step]);
+
+  function goTo(nextStep: 1 | 2) {
+    state.replaceDraft({ ...state.draft, lastStep: nextStep });
+    state.save(false);
+    router.push(`/create-event?step=${nextStep}`);
+  }
+
+  return step === 1
+    ? <EventDetailsForm user={user} {...state} onNext={() => goTo(2)} />
+    : <EventDateVenueStep {...state} onBack={() => goTo(1)} />;
 }
 
 export function EventWizard() {
   const { user } = useAuth();
   if (!user) return <PageLoader label="Hesab məlumatları yüklənir…" />;
   // Remount on account changes so one account never inherits another account's form.
-  return <EventDetailsStep key={user.id} user={user} />;
+  return <AccountEventWizard key={user.id} user={user} />;
 }
