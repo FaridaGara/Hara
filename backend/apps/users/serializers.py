@@ -9,7 +9,7 @@ from .models import User
 from .login_identifiers import find_login_user, normalize_phone
 
 
-PHONE_PATTERN = re.compile(r"^\+994\d{9}$")
+PHONE_PATTERN = re.compile(r"^\+994[0-9]{9}$")
 
 
 def validate_new_password(password, *, user=None):
@@ -125,7 +125,16 @@ class RegistrationSerializer(serializers.Serializer):
         phone = normalize_phone(value)
         if not PHONE_PATTERN.fullmatch(phone):
             raise serializers.ValidationError(
-                "Telefonu +994501112233 formatında daxil edin."
+                "+994 ölkə kodundan sonra 9 rəqəm daxil edin."
+            )
+        national_number = phone[4:]
+        if (
+            len(set(national_number)) == 1
+            or national_number in "01234567890123456789"
+            or national_number in "98765432109876543210"
+        ):
+            raise serializers.ValidationError(
+                "Telefon nömrəsinin bütün rəqəmləri eyni və ya ardıcıl ola bilməz."
             )
         return phone
 

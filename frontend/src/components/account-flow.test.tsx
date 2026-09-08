@@ -57,12 +57,13 @@ describe("account flow", () => {
     await user.type(screen.getByLabelText("Ad"), "Aysel");
     await user.type(screen.getByLabelText("Soyad"), "Məmmədova");
     await user.type(screen.getByLabelText("E-poçt"), "aysel@example.com");
-    await user.type(screen.getByLabelText("+994 xx xxx xx xx"), "+994501112233");
+    await user.type(screen.getByLabelText("Telefon nömrəsi"), "501112233");
     await user.type(screen.getByLabelText("Şifrə"), "SecurePass1");
     await user.type(screen.getByLabelText("Şifrəni təkrarla"), "SecurePass1");
     await user.click(screen.getByRole("checkbox"));
     await user.click(screen.getByRole("button", { name: "Qeydiyyatdan keç" }));
 
+    expect(authApi.register).toHaveBeenCalledWith(expect.objectContaining({ phone_number: "+994501112233" }));
     await waitFor(() =>
       expect(navigation.push).toHaveBeenCalledWith(
         "/verify?purpose=registration&email=aysel%40example.com&retry_after=60",
@@ -153,7 +154,7 @@ describe("code send limits", () => {
     render(<AuthProvider><RegistrationForm /></AuthProvider>);
     for (const [label, value] of [
       ["Ad", "Aysel"], ["Soyad", "Test"], ["E-poçt", "test@example.com"],
-      ["+994 xx xxx xx xx", "+994501112233"], ["Şifrə", "SecurePass1"], ["Şifrəni təkrarla", "SecurePass1"],
+      ["Telefon nömrəsi", "501112233"], ["Şifrə", "SecurePass1"], ["Şifrəni təkrarla", "SecurePass1"],
     ]) fireEvent.change(screen.getByLabelText(label), { target: { value } });
     fireEvent.click(screen.getByRole("checkbox"));
     const button = screen.getByRole("button", { name: "Qeydiyyatdan keç" }) as HTMLButtonElement;
@@ -187,4 +188,15 @@ describe("code send limits", () => {
     expect(button.disabled).toBe(true);
     expect(resend).toHaveBeenCalledTimes(2);
   });
+});
+
+
+it("does not submit an invalid phone even if form submission is forced", async () => {
+  const register = vi.spyOn(authApi, "register");
+  render(<AuthProvider><RegistrationForm /></AuthProvider>);
+  const phone = screen.getByLabelText("Telefon nömrəsi") as HTMLInputElement;
+  fireEvent.change(phone, { target: { value: "123456789" } });
+  expect((screen.getByRole("button", { name: "Qeydiyyatdan keç" }) as HTMLButtonElement).disabled).toBe(true);
+  await act(async () => fireEvent.submit(phone.form!));
+  expect(register).not.toHaveBeenCalled();
 });
