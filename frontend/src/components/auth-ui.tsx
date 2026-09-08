@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { InputHTMLAttributes, ReactNode, useState } from "react";
+import { InputHTMLAttributes, ReactNode, Ref, useState } from "react";
 
 type AuthFrameProps = {
   title: string;
@@ -72,9 +72,11 @@ export function AuthFrame({
 type AuthFieldProps = InputHTMLAttributes<HTMLInputElement> & {
   label: string;
   icon: "lock" | "user" | "eye";
+  prefix?: string;
+  inputRef?: Ref<HTMLInputElement>;
 };
 
-export function AuthField({ label, icon, type, className, ...props }: AuthFieldProps) {
+export function AuthField({ label, icon, type, className, prefix, inputRef, ...props }: AuthFieldProps) {
   const [visible, setVisible] = useState(false);
   const isPassword = type === "password";
   const inputType = isPassword && visible ? "text" : type;
@@ -89,8 +91,10 @@ export function AuthField({ label, icon, type, className, ...props }: AuthFieldP
         height={24}
         className="hara-auth-icon size-6 shrink-0"
       />
+      {prefix ? <span aria-hidden="true" className="shrink-0 text-[17px]">{prefix}</span> : null}
       <input
         {...props}
+        ref={inputRef}
         type={inputType}
         aria-label={label}
         placeholder={props.placeholder || label}

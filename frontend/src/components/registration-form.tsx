@@ -8,7 +8,9 @@ import { FormEvent, useState } from "react";
 import { retryAfterSeconds, useRetryCountdown } from "@/hooks/use-retry-countdown";
 
 import { ApiError } from "@/lib/api";
+import { phoneNumberError, PHONE_PREFIX } from "@/lib/phone-number";
 
+import { PhoneNumberField } from "./phone-number-field";
 import { useAuth } from "./auth-provider";
 import { AuthButton, AuthField, AuthFrame, AuthMessage } from "./auth-ui";
 
@@ -29,6 +31,11 @@ export function RegistrationForm() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (submitting || retry.remaining > 0) return;
+    const phoneError = phoneNumberError(phone);
+    if (phoneError) {
+      setError(phoneError);
+      return;
+    }
     if (password !== passwordConfirm) {
       setError("Şifrələr eyni deyil.");
       return;
@@ -41,7 +48,7 @@ export function RegistrationForm() {
         first_name: firstName.trim(),
         last_name: lastName.trim(),
         email: email.trim(),
-        phone_number: phone.trim(),
+        phone_number: `${PHONE_PREFIX}${phone}`,
         password,
         password_confirm: passwordConfirm,
         accept_terms: acceptedTerms,
@@ -68,7 +75,7 @@ export function RegistrationForm() {
     firstName.trim() &&
     lastName.trim() &&
     email.trim() &&
-    phone.trim() &&
+    !phoneNumberError(phone) &&
     password &&
     passwordConfirm &&
     acceptedTerms;
@@ -121,17 +128,7 @@ export function RegistrationForm() {
           onChange={(event) => setEmail(event.target.value)}
           disabled={submitting}
         />
-        <AuthField
-          label="+994 xx xxx xx xx"
-          icon="lock"
-          type="tel"
-          name="phone_number"
-          autoComplete="tel"
-          required
-          value={phone}
-          onChange={(event) => setPhone(event.target.value)}
-          disabled={submitting}
-        />
+        <PhoneNumberField value={phone} onChange={setPhone} disabled={submitting} />
         <AuthField
           label="Şifrə"
           icon="eye"
