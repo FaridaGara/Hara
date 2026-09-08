@@ -33,6 +33,15 @@ class VerificationSendThrottled(Throttled):
         }
 
 
+class VerificationAttemptThrottled(Throttled):
+    def __init__(self, wait):
+        super().__init__(wait=wait)
+        self.detail = {
+            "detail": "Təsdiqləmə cəhdi limiti bitib. Göstərilən müddətdən sonra yenidən cəhd edin.",
+            "retry_after": self.wait,
+        }
+
+
 def client_ip(request):
     """Resolve identity using the explicitly configured ingress trust boundary."""
     def parse(value):
@@ -146,6 +155,23 @@ class SocialLoginThrottle(BaseThrottle):
             "social-login-ip", client_ip(request),
             settings.SOCIAL_LOGIN_IP_MAX_ATTEMPTS,
             settings.SOCIAL_LOGIN_IP_WINDOW_SECONDS,
+        )
+        return not self.retry_after
+
+    def wait(self):
+        return self.retry_after
+
+
+class VerificationAttemptThrottle(BaseThrottle):
+    def allow_request(self, request, view):
+        self.retry_after = 0
+        if request.method != "POST":
+            return True
+        # Commit before body parsing, code checks and password-reset transactions.
+        self.retry_after = consume_attempt(
+            "verification-attempt-ip", client_ip(request),
+            settings.AUTH_VERIFY_IP_MAX_ATTEMPTS,
+            settings.AUTH_VERIFY_IP_WINDOW_SECONDS,
         )
         return not self.retry_after
 

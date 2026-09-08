@@ -318,5 +318,9 @@ AUTH_SEND_IP_WINDOW_SECONDS = int(os.getenv("AUTH_SEND_IP_WINDOW_SECONDS", "600"
 AUTH_SEND_EMAIL_MAX_ATTEMPTS = int(os.getenv("AUTH_SEND_EMAIL_MAX_ATTEMPTS", "5"))
 AUTH_SEND_EMAIL_WINDOW_SECONDS = int(os.getenv("AUTH_SEND_EMAIL_WINDOW_SECONDS", "3600"))
 
+# Shared across email verification, reset-code checks and reset confirmation.
+AUTH_VERIFY_IP_MAX_ATTEMPTS = int(os.getenv("AUTH_VERIFY_IP_MAX_ATTEMPTS", "30"))
+AUTH_VERIFY_IP_WINDOW_SECONDS = int(os.getenv("AUTH_VERIFY_IP_WINDOW_SECONDS", "60"))
+
 # Bounded cleanup runs on auth traffic in the existing service, without cron.
 AUTH_MAINTENANCE_ENABLED = os.getenv("AUTH_MAINTENANCE_ENABLED", "true").lower() == "true"

@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useState } from "react";
 
+import { retryAfterSeconds, useRetryCountdown } from "@/hooks/use-retry-countdown";
 import { ApiError, authApi } from "@/lib/api";
 
 import {
@@ -21,13 +22,14 @@ export function ResetPasswordForm() {
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const retry = useRetryCountdown();
 
   const passwordIsStrong =
     password.length >= 8 && /[A-ZƏÖÜİÇŞĞ]/.test(password) && /\d/.test(password);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (submitting || !token) return;
+    if (submitting || retry.remaining > 0 || !token) return;
     if (password !== passwordConfirm) {
       setError("Şifrələr eyni deyil.");
       return;
@@ -38,6 +40,9 @@ export function ResetPasswordForm() {
       await authApi.confirmPasswordReset(token, password, passwordConfirm);
       router.replace("/login?reset=success");
     } catch (caughtError) {
+      if (caughtError instanceof ApiError && caughtError.status === 429) {
+        retry.start(retryAfterSeconds(caughtError.payload));
+      }
       setError(
         caughtError instanceof ApiError
           ? caughtError.message
@@ -84,10 +89,16 @@ export function ResetPasswordForm() {
         <PasswordRequirements password={password} />
         {!token ? <AuthMessage>Bərpa keçidi tapılmadı. Yenidən kod tələb edin.</AuthMessage> : null}
         {error ? <AuthMessage>{error}</AuthMessage> : null}
+        {retry.remaining > 0 ? (
+          <p role="status" className="text-sm text-[var(--hara-auth-secondary)]">
+            Yenidən cəhd üçün {retry.remaining} saniyə gözləyin.
+          </p>
+        ) : null}
         <AuthButton
           type="submit"
           disabled={
             submitting ||
+            retry.remaining > 0 ||
             !token ||
             !passwordIsStrong ||
             password !== passwordConfirm
