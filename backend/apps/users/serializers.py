@@ -83,7 +83,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
 
 class SocialLoginSerializer(serializers.Serializer):
-    credential = serializers.CharField(trim_whitespace=False)
+    credential = serializers.CharField(trim_whitespace=False, max_length=16384)
     nonce = serializers.CharField(
         required=False,
         allow_blank=True,

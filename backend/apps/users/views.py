@@ -22,7 +22,7 @@ from .serializers import (
 )
 from .social_auth import SocialTokenError, verify_apple_token, verify_google_token
 from .throttles import (
-    CredentialsLoginThrottle, LoginThrottled,
+    CredentialsLoginThrottle, LoginThrottled, SocialLoginThrottle,
     VerificationSendThrottle, VerificationSendThrottled,
 )
 from .verification import (
@@ -55,6 +55,13 @@ AUTH_DELIVERY_SCHEMA = inline_serializer(
 PASSWORD_RESET_TOKEN_SCHEMA = inline_serializer(
     name="PasswordResetToken",
     fields={"reset_token": drf_serializers.CharField()},
+)
+LOGIN_RATE_LIMITED_SCHEMA = inline_serializer(
+    name="LoginRateLimited",
+    fields={
+        "detail": drf_serializers.CharField(),
+        "retry_after": drf_serializers.IntegerField(),
+    },
 )
 
 
@@ -131,13 +138,7 @@ def verification_error_response(exc):
         request=CredentialsLoginSerializer,
         responses={
             200: AUTH_SESSION_SCHEMA,
-            429: inline_serializer(
-                name="LoginRateLimited",
-                fields={
-                    "detail": drf_serializers.CharField(),
-                    "retry_after": drf_serializers.IntegerField(),
-                },
-            ),
+            429: LOGIN_RATE_LIMITED_SCHEMA,
         },
     )
 )
@@ -374,14 +375,18 @@ class PasswordResetConfirmAPIView(APIView):
     post=extend_schema(
         auth=[],
         request=SocialLoginSerializer,
-        responses={200: AUTH_SESSION_SCHEMA},
+        responses={200: AUTH_SESSION_SCHEMA, 429: LOGIN_RATE_LIMITED_SCHEMA},
     )
 )
 class BaseSocialLoginAPIView(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
+    throttle_classes = [SocialLoginThrottle]
     provider = None
     verifier = None
+
+    def throttled(self, request, wait):
+        raise LoginThrottled(wait)
 
     def post(self, request):
         serializer = SocialLoginSerializer(data=request.data)

@@ -136,6 +136,23 @@ class CredentialsLoginThrottle(BaseThrottle):
         return self.retry_after
 
 
+class SocialLoginThrottle(BaseThrottle):
+    def allow_request(self, request, view):
+        self.retry_after = 0
+        if request.method != "POST":
+            return True
+        # One budget across both providers, before body parsing or token verification.
+        self.retry_after = consume_attempt(
+            "social-login-ip", client_ip(request),
+            settings.SOCIAL_LOGIN_IP_MAX_ATTEMPTS,
+            settings.SOCIAL_LOGIN_IP_WINDOW_SECONDS,
+        )
+        return not self.retry_after
+
+    def wait(self):
+        return self.retry_after
+
+
 def reserve_verification_send(email):
     """Reserve an email send slot; a denied cooldown must not spend hourly budget."""
     with transaction.atomic():
