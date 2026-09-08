@@ -126,6 +126,58 @@ describe("account flow", () => {
   });
 });
 
+describe("email delivery errors", () => {
+  const message = "E-poçt göndərmə xidməti hazırda əlçatan deyil. Bir qədər sonra yenidən cəhd edin.";
+  function unavailable() {
+    return new ApiError({ kind: "http", status: 503, message, payload: { code: "email_delivery_unavailable" } });
+  }
+
+  it("keeps registration fields and does not navigate when sending fails", async () => {
+    vi.spyOn(authApi, "register").mockRejectedValue(unavailable());
+    render(<AuthProvider><RegistrationForm /></AuthProvider>);
+    for (const [label, value] of [
+      ["Ad", "Aysel"], ["Soyad", "Test"], ["E-poçt", "test@example.com"],
+      ["Telefon nömrəsi", "501112233"], ["Şifrə", "SecurePass1"], ["Şifrəni təkrarla", "SecurePass1"],
+    ]) fireEvent.change(screen.getByLabelText(label), { target: { value } });
+    fireEvent.click(screen.getByRole("checkbox"));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Qeydiyyatdan keç" })));
+    expect(screen.getByRole("alert").textContent).toContain(message);
+    expect((screen.getByLabelText("E-poçt") as HTMLInputElement).value).toBe("test@example.com");
+    expect((screen.getByLabelText("Şifrə") as HTMLInputElement).value).toBe("SecurePass1");
+    expect(navigation.push).not.toHaveBeenCalled();
+  });
+
+  it("shows reset delivery failure instead of opening the code screen", async () => {
+    vi.spyOn(authApi, "requestPasswordReset").mockRejectedValue(unavailable());
+    render(<ForgotPasswordForm />);
+    fireEvent.change(screen.getByLabelText("E-poçt ünvanınız"), { target: { value: "test@example.com" } });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Kodu göndər" })));
+    expect(screen.getByRole("alert").textContent).toContain(message);
+    expect((screen.getByLabelText("E-poçt ünvanınız") as HTMLInputElement).value).toBe("test@example.com");
+    expect(navigation.push).not.toHaveBeenCalled();
+  });
+
+  it("preserves the entered code and clears stale resend success on delivery failure", async () => {
+    vi.useFakeTimers();
+    navigation.searchParams = new URLSearchParams("purpose=registration&email=test%40example.com&retry_after=60");
+    const resend = vi.spyOn(authApi, "resendVerification")
+      .mockResolvedValueOnce({ detail: "Yeni kod göndərildi.", retry_after: 60 })
+      .mockRejectedValueOnce(unavailable());
+    render(<AuthProvider><VerificationForm /></AuthProvider>);
+    await act(async () => vi.advanceTimersByTime(60000));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Kodu yenidən göndər" })));
+    expect(screen.getByRole("status").textContent).toContain("Yeni kod göndərildi.");
+    fireEvent.change(screen.getByLabelText("Kodun 1-ci rəqəmi"), { target: { value: "4" } });
+    await act(async () => vi.advanceTimersByTime(60000));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Kodu yenidən göndər" })));
+    expect(screen.getByRole("alert").textContent).toContain(message);
+    expect(screen.queryByText("Yeni kod göndərildi.")).toBeNull();
+    expect((screen.getByLabelText("Kodun 1-ci rəqəmi") as HTMLInputElement).value).toBe("4");
+    expect(resend).toHaveBeenCalledTimes(2);
+    expect(navigation.replace).not.toHaveBeenCalled();
+  });
+});
+
 describe("code send limits", () => {
   function rateLimited(seconds: number) {
     return new ApiError({ kind: "http", status: 429, message: "Bir qədər gözləyin.", payload: { retry_after: seconds } });

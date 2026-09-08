@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .sessions import issue_session
+from .email_delivery import EmailDeliveryError, ensure_email_delivery_configured
 from .models import SocialIdentity, User
 from .models import VerificationCode
 from .serializers import (
@@ -51,6 +52,13 @@ AUTH_DELIVERY_SCHEMA = inline_serializer(
         "email": drf_serializers.EmailField(required=False),
         "expires_at": drf_serializers.DateTimeField(required=False),
         "retry_after": drf_serializers.IntegerField(required=False),
+    },
+)
+EMAIL_DELIVERY_UNAVAILABLE_SCHEMA = inline_serializer(
+    name="EmailDeliveryUnavailable",
+    fields={
+        "detail": drf_serializers.CharField(),
+        "code": drf_serializers.ChoiceField(choices=["email_delivery_unavailable"]),
     },
 )
 PASSWORD_RESET_TOKEN_SCHEMA = inline_serializer(
@@ -176,12 +184,23 @@ class VerificationSendAPIView(APIView):
     def throttled(self, request, wait):
         raise VerificationSendThrottled(wait)
 
+    def handle_exception(self, exc):
+        if isinstance(exc, EmailDeliveryError):
+            return Response(
+                {
+                    "detail": "E-poçt göndərmə xidməti hazırda əlçatan deyil. Bir qədər sonra yenidən cəhd edin.",
+                    "code": "email_delivery_unavailable",
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return super().handle_exception(exc)
+
 
 @extend_schema_view(
     post=extend_schema(
         auth=[],
         request=RegistrationSerializer,
-        responses={201: AUTH_DELIVERY_SCHEMA, 429: AUTH_DELIVERY_SCHEMA},
+        responses={201: AUTH_DELIVERY_SCHEMA, 429: AUTH_DELIVERY_SCHEMA, 503: EMAIL_DELIVERY_UNAVAILABLE_SCHEMA},
     )
 )
 class RegistrationAPIView(VerificationSendAPIView):
@@ -189,6 +208,7 @@ class RegistrationAPIView(VerificationSendAPIView):
     def post(self, request):
         serializer = RegistrationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        ensure_email_delivery_configured()
         try:
             # Throttle reservations commit before account/code transactions.
             with transaction.atomic():
@@ -257,7 +277,7 @@ class EmailVerificationAPIView(VerificationAttemptAPIView):
     post=extend_schema(
         auth=[],
         request=VerificationResendSerializer,
-        responses={200: AUTH_DELIVERY_SCHEMA, 429: AUTH_DELIVERY_SCHEMA},
+        responses={200: AUTH_DELIVERY_SCHEMA, 429: AUTH_DELIVERY_SCHEMA, 503: EMAIL_DELIVERY_UNAVAILABLE_SCHEMA},
     )
 )
 class VerificationResendAPIView(VerificationSendAPIView):
@@ -265,6 +285,7 @@ class VerificationResendAPIView(VerificationSendAPIView):
     def post(self, request):
         serializer = VerificationResendSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        ensure_email_delivery_configured()
         purpose = serializer.validated_data["purpose"]
         generic_reset_response = {
             "detail": "Uyğun hesab varsa, yeni kod e-poçta göndərildi.",
@@ -296,7 +317,7 @@ class VerificationResendAPIView(VerificationSendAPIView):
     post=extend_schema(
         auth=[],
         request=PasswordResetRequestSerializer,
-        responses={200: AUTH_DELIVERY_SCHEMA, 429: AUTH_DELIVERY_SCHEMA},
+        responses={200: AUTH_DELIVERY_SCHEMA, 429: AUTH_DELIVERY_SCHEMA, 503: EMAIL_DELIVERY_UNAVAILABLE_SCHEMA},
     )
 )
 class PasswordResetRequestAPIView(VerificationSendAPIView):
@@ -304,6 +325,8 @@ class PasswordResetRequestAPIView(VerificationSendAPIView):
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        # A missing provider must not disclose whether this email has an account.
+        ensure_email_delivery_configured()
         user = User.objects.filter(
             email=serializer.validated_data["email"],
             is_active=True,

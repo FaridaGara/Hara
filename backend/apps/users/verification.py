@@ -10,6 +10,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from .models import User, VerificationCode
+from .email_delivery import EMAIL_TRANSPORT_ERRORS, EmailDeliveryError, email_connection
 
 
 class VerificationError(Exception):
@@ -57,6 +58,7 @@ def _email_copy(purpose, code):
 
 @transaction.atomic
 def issue_verification_code(user, purpose, *, enforce_cooldown=True):
+    connection = email_connection()
     now = timezone.now()
     latest = (
         VerificationCode.objects.select_for_update()
@@ -84,13 +86,19 @@ def issue_verification_code(user, purpose, *, enforce_cooldown=True):
         expires_at=now + timedelta(seconds=_lifetime_seconds()),
     )
     subject, message = _email_copy(purpose, code)
-    send_mail(
-        subject,
-        message,
-        settings.DEFAULT_FROM_EMAIL,
-        [user.email],
-        fail_silently=False,
-    )
+    try:
+        sent = send_mail(
+            subject,
+            message,
+            settings.DEFAULT_FROM_EMAIL,
+            [user.email],
+            fail_silently=False,
+            connection=connection,
+        )
+        if sent != 1:
+            raise EmailDeliveryError("Email transport did not accept the message.")
+    except EMAIL_TRANSPORT_ERRORS:
+        raise EmailDeliveryError("Email delivery could not be confirmed.") from None
     return challenge
 
 
