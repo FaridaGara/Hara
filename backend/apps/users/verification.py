@@ -167,6 +167,10 @@ def consume_password_reset_token(token, new_password):
         ) from exc
 
     user = User.objects.select_for_update().get(pk=challenge.user_id)
+    # The account can be disabled after code verification. Recheck the locked
+    # user at consumption time, before changing the password or burning the code.
+    if not user.is_active:
+        raise VerificationError("Şifrə bərpa keçidi etibarsızdır və ya vaxtı bitib.")
     user.set_password(new_password)
     user.save(update_fields=("password",))
     challenge.consumed_at = timezone.now()
