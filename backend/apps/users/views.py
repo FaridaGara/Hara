@@ -23,6 +23,7 @@ from .serializers import (
 from .social_auth import SocialTokenError, verify_apple_token, verify_google_token
 from .throttles import (
     CredentialsLoginThrottle, LoginThrottled, SocialLoginThrottle,
+    VerificationAttemptThrottle, VerificationAttemptThrottled,
     VerificationSendThrottle, VerificationSendThrottled,
 )
 from .verification import (
@@ -58,6 +59,13 @@ PASSWORD_RESET_TOKEN_SCHEMA = inline_serializer(
 )
 LOGIN_RATE_LIMITED_SCHEMA = inline_serializer(
     name="LoginRateLimited",
+    fields={
+        "detail": drf_serializers.CharField(),
+        "retry_after": drf_serializers.IntegerField(),
+    },
+)
+VERIFICATION_ATTEMPT_LIMITED_SCHEMA = inline_serializer(
+    name="VerificationAttemptRateLimited",
     fields={
         "detail": drf_serializers.CharField(),
         "retry_after": drf_serializers.IntegerField(),
@@ -199,16 +207,23 @@ class RegistrationAPIView(VerificationSendAPIView):
         )
 
 
+class VerificationAttemptAPIView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    throttle_classes = [VerificationAttemptThrottle]
+
+    def throttled(self, request, wait):
+        raise VerificationAttemptThrottled(wait)
+
+
 @extend_schema_view(
     post=extend_schema(
         auth=[],
         request=VerificationCodeSerializer,
-        responses={200: AUTH_SESSION_SCHEMA},
+        responses={200: AUTH_SESSION_SCHEMA, 429: VERIFICATION_ATTEMPT_LIMITED_SCHEMA},
     )
 )
-class EmailVerificationAPIView(APIView):
-    authentication_classes = []
-    permission_classes = [AllowAny]
+class EmailVerificationAPIView(VerificationAttemptAPIView):
 
     @transaction.atomic
     def post(self, request):
@@ -314,12 +329,10 @@ class PasswordResetRequestAPIView(VerificationSendAPIView):
     post=extend_schema(
         auth=[],
         request=VerificationCodeSerializer,
-        responses={200: PASSWORD_RESET_TOKEN_SCHEMA},
+        responses={200: PASSWORD_RESET_TOKEN_SCHEMA, 429: VERIFICATION_ATTEMPT_LIMITED_SCHEMA},
     )
 )
-class PasswordResetVerifyAPIView(APIView):
-    authentication_classes = []
-    permission_classes = [AllowAny]
+class PasswordResetVerifyAPIView(VerificationAttemptAPIView):
 
     def post(self, request):
         serializer = VerificationCodeSerializer(data=request.data)
@@ -351,12 +364,10 @@ class PasswordResetVerifyAPIView(APIView):
     post=extend_schema(
         auth=[],
         request=PasswordResetConfirmSerializer,
-        responses={200: AUTH_DELIVERY_SCHEMA},
+        responses={200: AUTH_DELIVERY_SCHEMA, 429: VERIFICATION_ATTEMPT_LIMITED_SCHEMA},
     )
 )
-class PasswordResetConfirmAPIView(APIView):
-    authentication_classes = []
-    permission_classes = [AllowAny]
+class PasswordResetConfirmAPIView(VerificationAttemptAPIView):
 
     def post(self, request):
         serializer = PasswordResetConfirmSerializer(data=request.data)

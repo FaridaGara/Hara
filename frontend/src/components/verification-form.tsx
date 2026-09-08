@@ -33,6 +33,7 @@ export function VerificationForm() {
   const [digits, setDigits] = useState(["", "", "", ""]);
   const [submitting, setSubmitting] = useState(false);
   const [resending, setResending] = useState(false);
+  const verificationRetry = useRetryCountdown();
   const { remaining, start: startRetry } = useRetryCountdown(
     retryAfterSeconds({ retry_after: Number(searchParams.get("retry_after")) }, RESEND_SECONDS),
   );
@@ -66,7 +67,7 @@ export function VerificationForm() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const code = digits.join("");
-    if (!email || code.length !== CODE_LENGTH || submitting) return;
+    if (!email || code.length !== CODE_LENGTH || submitting || verificationRetry.remaining > 0) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -80,6 +81,9 @@ export function VerificationForm() {
         );
       }
     } catch (caughtError) {
+      if (caughtError instanceof ApiError && caughtError.status === 429) {
+        verificationRetry.start(retryAfterSeconds(caughtError.payload));
+      }
       setError(
         caughtError instanceof ApiError
           ? caughtError.message
@@ -170,9 +174,14 @@ export function VerificationForm() {
         {!email ? <AuthMessage>E-poçt ünvanı tapılmadı. Əvvəlki mərhələyə qayıdın.</AuthMessage> : null}
         {error ? <AuthMessage>{error}</AuthMessage> : null}
         {notice ? <p role="status" className="text-sm text-[var(--hara-auth-secondary)]">{notice}</p> : null}
+        {verificationRetry.remaining > 0 ? (
+          <p role="status" className="text-sm text-[var(--hara-auth-secondary)]">
+            Kodu yenidən yoxlamaq üçün {formatCountdown(verificationRetry.remaining)} gözləyin.
+          </p>
+        ) : null}
         <AuthButton
           type="submit"
-          disabled={submitting || !email || digits.some((digit) => !digit)}
+          disabled={submitting || verificationRetry.remaining > 0 || !email || digits.some((digit) => !digit)}
         >
           {submitting ? "Təsdiqlənir…" : "Təsdiq et"}
         </AuthButton>

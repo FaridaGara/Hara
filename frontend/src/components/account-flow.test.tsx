@@ -200,3 +200,109 @@ it("does not submit an invalid phone even if form submission is forced", async (
   await act(async () => fireEvent.submit(phone.form!));
   expect(register).not.toHaveBeenCalled();
 });
+
+describe("verification attempt limits", () => {
+  function limited(seconds?: number) {
+    return new ApiError({ kind: "http", status: 429, message: "Təsdiqləmə cəhdi limiti bitib.", payload: { retry_after: seconds } });
+  }
+
+  function enterCode() {
+    for (const [index, digit] of ["4", "8", "2", "1"].entries()) {
+      fireEvent.change(screen.getByLabelText(`Kodun ${index + 1}-ci rəqəmi`), { target: { value: digit } });
+    }
+  }
+
+  it.each(["registration", "password_reset"])("%s yoxlama limiti bitəndən sonra eyni kodla davam edir", async (purpose) => {
+    vi.useFakeTimers();
+    navigation.searchParams = new URLSearchParams(`purpose=${purpose}&email=test%40example.com&retry_after=60`);
+    const verify = purpose === "registration"
+      ? vi.spyOn(authApi, "verifyEmail").mockRejectedValueOnce(limited(120))
+        .mockResolvedValueOnce({ access: "access", refresh: "refresh", user: profile })
+      : vi.spyOn(authApi, "verifyPasswordReset").mockRejectedValueOnce(limited(120))
+        .mockResolvedValueOnce({ reset_token: "reset-ticket" });
+    render(<AuthProvider><VerificationForm /></AuthProvider>);
+    enterCode();
+    const button = screen.getByRole("button", { name: "Təsdiq et" }) as HTMLButtonElement;
+    const resend = screen.getByRole("button", { name: "Kodu yenidən göndər" }) as HTMLButtonElement;
+    await act(async () => fireEvent.click(button));
+    expect(button.disabled).toBe(true);
+    expect(screen.getByRole("status").textContent).toContain("Kodu yenidən yoxlamaq üçün 02:00");
+    expect(screen.getByRole("alert").textContent).toContain("limiti bitib");
+    for (const [index, digit] of ["4", "8", "2", "1"].entries()) {
+      expect((screen.getByLabelText(`Kodun ${index + 1}-ci rəqəmi`) as HTMLInputElement).value).toBe(digit);
+    }
+    await act(async () => fireEvent.submit(button.form!));
+    expect(verify).toHaveBeenCalledTimes(1);
+    expect(navigation.replace).not.toHaveBeenCalled();
+    await act(async () => vi.advanceTimersByTime(60000));
+    expect(resend.disabled).toBe(false);
+    expect(button.disabled).toBe(true);
+    await act(async () => vi.advanceTimersByTime(59000));
+    expect(button.disabled).toBe(true);
+    await act(async () => vi.advanceTimersByTime(1000));
+    expect(button.disabled).toBe(false);
+    await act(async () => fireEvent.click(button));
+    expect(verify).toHaveBeenCalledTimes(2);
+    expect(verify).toHaveBeenLastCalledWith("test@example.com", "4821");
+    expect(navigation.replace).toHaveBeenCalledWith(purpose === "registration" ? "/" : "/reset-password?token=reset-ticket");
+  });
+
+  it("yeni kod göndərilməsi yoxlama taymerini sıfırlamır", async () => {
+    vi.useFakeTimers();
+    navigation.searchParams = new URLSearchParams("purpose=password_reset&email=test%40example.com&retry_after=60");
+    const verify = vi.spyOn(authApi, "verifyPasswordReset").mockRejectedValueOnce(limited(180));
+    vi.spyOn(authApi, "resendVerification").mockResolvedValue({ detail: "Yeni kod göndərildi.", retry_after: 60 });
+    render(<AuthProvider><VerificationForm /></AuthProvider>);
+    enterCode();
+    const button = screen.getByRole("button", { name: "Təsdiq et" }) as HTMLButtonElement;
+    await act(async () => fireEvent.click(button));
+    await act(async () => vi.advanceTimersByTime(60000));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Kodu yenidən göndər" })));
+    enterCode();
+    expect(screen.getByText(/Kodu yenidən yoxlamaq üçün 02:00/)).toBeTruthy();
+    expect(button.disabled).toBe(true);
+    await act(async () => fireEvent.submit(button.form!));
+    expect(verify).toHaveBeenCalledTimes(1);
+  });
+
+  it("səhv kod üçün adi 400 cavabı əlavə gözləmə yaratmır", async () => {
+    navigation.searchParams = new URLSearchParams("purpose=password_reset&email=test%40example.com");
+    const verify = vi.spyOn(authApi, "verifyPasswordReset").mockRejectedValue(new ApiError({
+      kind: "http", status: 400, message: "Təsdiqləmə kodu yanlışdır.",
+    }));
+    render(<AuthProvider><VerificationForm /></AuthProvider>);
+    enterCode();
+    const button = screen.getByRole("button", { name: "Təsdiq et" }) as HTMLButtonElement;
+    await act(async () => fireEvent.click(button));
+    expect(button.disabled).toBe(false);
+    expect(screen.queryByText(/Kodu yenidən yoxlamaq üçün/)).toBeNull();
+    await act(async () => fireEvent.click(button));
+    expect(verify).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([120, undefined])("şifrə yeniləmə 429 zamanı məlumatları saxlayır və müddət bitəndə davam edir (%s)", async (seconds) => {
+    vi.useFakeTimers();
+    navigation.searchParams = new URLSearchParams("token=reset-ticket");
+    const confirm = vi.spyOn(authApi, "confirmPasswordReset").mockRejectedValueOnce(limited(seconds))
+      .mockResolvedValueOnce({ detail: "updated" });
+    render(<ResetPasswordForm />);
+    fireEvent.change(screen.getByLabelText("Yeni şifrə"), { target: { value: "NewSecure2" } });
+    fireEvent.change(screen.getByLabelText("Şifrəni təkrarla"), { target: { value: "NewSecure2" } });
+    const button = screen.getByRole("button", { name: "Şifrəni yenilə" }) as HTMLButtonElement;
+    await act(async () => fireEvent.click(button));
+    expect(button.disabled).toBe(true);
+    expect(screen.getByRole("status").textContent).toContain(`${seconds ?? 60} saniyə`);
+    expect((screen.getByLabelText("Yeni şifrə") as HTMLInputElement).value).toBe("NewSecure2");
+    await act(async () => fireEvent.submit(button.form!));
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(navigation.replace).not.toHaveBeenCalled();
+    await act(async () => vi.advanceTimersByTime(((seconds ?? 60) - 1) * 1000));
+    expect(button.disabled).toBe(true);
+    await act(async () => vi.advanceTimersByTime(1000));
+    expect(button.disabled).toBe(false);
+    await act(async () => fireEvent.click(button));
+    expect(confirm).toHaveBeenCalledTimes(2);
+    expect(confirm).toHaveBeenLastCalledWith("reset-ticket", "NewSecure2", "NewSecure2");
+    expect(navigation.replace).toHaveBeenCalledWith("/login?reset=success");
+  });
+});
