@@ -15,6 +15,7 @@ import { formatBakuDate, safePosterUrl } from "@/lib/format";
 import { useAuth } from "./auth-provider";
 import { useFavorites } from "./favorites-provider";
 import { MobileTabBar } from "./mobile-tab-bar";
+import { HomeAddButton } from "./home-add-button";
 
 type LoadEvents = (
   filters?: { search?: string; ordering?: "start_at" },
@@ -366,7 +367,7 @@ export function HaraHome({ loadEvents = eventsApi.list }: { loadEvents?: LoadEve
   };
 
   return (
-    <main className="hara-home relative mx-auto min-h-dvh w-full max-w-[402px] overflow-x-hidden pb-[108px] transition-colors sm:my-6 sm:min-h-[calc(100dvh-48px)] sm:rounded-[32px]">
+    <main className="hara-home relative mx-auto min-h-dvh w-full max-w-[402px] overflow-x-hidden pb-[calc(150px+var(--hara-safe-bottom))] transition-colors sm:my-6 sm:min-h-[calc(100dvh-48px)] sm:rounded-[32px]">
       <Header />
       <SearchBar onSearch={searchAgain} />
 
@@ -425,6 +426,7 @@ export function HaraHome({ loadEvents = eventsApi.list }: { loadEvents?: LoadEve
         </div>
       </section>
 
+      <HomeAddButton />
       <MobileTabBar active="home" theme="adaptive" />
     </main>
   );

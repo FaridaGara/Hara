@@ -1,0 +1,80 @@
+.position {
+  position: fixed;
+  /* The existing tab bar is 58px tall, plus the device's safe area. */
+  bottom: calc(58px + var(--hara-safe-bottom) + 16px);
+  inset-inline: 0;
+  z-index: 40;
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  max-width: 402px;
+  margin-inline: auto;
+  padding-inline: 24px;
+  pointer-events: none;
+}
+
+.button {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  flex: none;
+  padding: 16px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 48px;
+  background: #ff009b;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.button:not(:disabled) {
+  cursor: pointer;
+}
+
+.button:focus-visible {
+  outline: 3px solid var(--hara-tab-active);
+  outline-offset: 4px;
+}
+
+/* The Figma palette, adapted to a CSS animation without a WebGPU dependency. */
+.gradient {
+  position: absolute;
+  inset: -35%;
+  z-index: -1;
+  background:
+    radial-gradient(ellipse at 28% 18%, #ffe99e 0%, transparent 34%),
+    radial-gradient(ellipse at 74% 25%, #8178ff 0%, transparent 44%),
+    radial-gradient(ellipse at 30% 76%, #ff009b 0%, transparent 56%),
+    conic-gradient(from 45deg, #ff009b, #8178ff, #ff009b, #bd007a, #ff009b);
+  animation: gradient-drift 8s linear infinite;
+  pointer-events: none;
+}
+
+.button::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(ellipse at 30% 12%, #ffffff66, transparent 52%);
+  box-shadow: inset 0 -9px 12px #7c004a33;
+  pointer-events: none;
+}
+
+.icon {
+  position: relative;
+  z-index: 1;
+  width: 28px;
+  height: 28px;
+}
+
+@keyframes gradient-drift {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gradient { animation: none; }
+}
