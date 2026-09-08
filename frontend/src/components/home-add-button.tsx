@@ -1,17 +1,16 @@
 import Image from "next/image";
+import Link from "next/link";
 
 import styles from "./home-add-button.module.css";
 
-/** Figma 690:17474. Enable once the event-creation destination is approved. */
-export function HomeAddButton({ onAdd }: { onAdd?: () => void }) {
+/** Figma 690:17474. The destination checks authentication before rendering. */
+export function HomeAddButton() {
   return (
     <div className={styles.position}>
-      <button
-        type="button"
+      <Link
+        href="/create-event"
         className={styles.button}
         aria-label="Tədbir əlavə et"
-        onClick={onAdd}
-        disabled={!onAdd}
       >
         <span aria-hidden="true" className={styles.gradient} />
         <Image
@@ -21,7 +20,7 @@ export function HomeAddButton({ onAdd }: { onAdd?: () => void }) {
           height={28}
           className={styles.icon}
         />
-      </button>
+      </Link>
     </div>
   );
 }

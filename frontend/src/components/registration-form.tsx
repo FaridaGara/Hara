@@ -2,13 +2,14 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { FormEvent, useEffect, useState } from "react";
 
 import { retryAfterSeconds, useRetryCountdown } from "@/hooks/use-retry-countdown";
 
 import { ApiError } from "@/lib/api";
 import { phoneNumberError, PHONE_PREFIX } from "@/lib/phone-number";
+import { authHref, safeLocalRedirect } from "@/lib/routes";
 
 import { PhoneNumberField } from "./phone-number-field";
 import { useAuth } from "./auth-provider";
@@ -16,7 +17,10 @@ import { AuthButton, AuthField, AuthFrame, AuthMessage } from "./auth-ui";
 
 export function RegistrationForm() {
   const router = useRouter();
-  const { register } = useAuth();
+  const searchParams = useSearchParams();
+  const { register, status } = useAuth();
+  const next = searchParams.get("next");
+  const nextRoute = safeLocalRedirect(next);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -27,6 +31,10 @@ export function RegistrationForm() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const retry = useRetryCountdown();
+
+  useEffect(() => {
+    if (status === "authenticated") router.replace(nextRoute);
+  }, [nextRoute, router, status]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -55,7 +63,7 @@ export function RegistrationForm() {
       });
       const verificationEmail = response.email || email.trim();
       router.push(
-        `/verify?purpose=registration&email=${encodeURIComponent(verificationEmail)}&retry_after=${retryAfterSeconds(response)}`,
+        authHref(`/verify?purpose=registration&email=${encodeURIComponent(verificationEmail)}&retry_after=${retryAfterSeconds(response)}`, next),
       );
     } catch (caughtError) {
       if (caughtError instanceof ApiError && caughtError.status === 429) {
@@ -84,11 +92,11 @@ export function RegistrationForm() {
     <AuthFrame
       title="Qeydiyyat"
       subtitle="Yeni hesab yaradın"
-      backHref="/login"
+      backHref={authHref("/login", next)}
       footer={
         <p className="text-[var(--hara-auth-secondary)]">
           Artıq hesabın var?{" "}
-          <Link className="font-semibold text-[#4e55c5]" href="/login">
+          <Link className="font-semibold text-[#4e55c5]" href={authHref("/login", next)}>
             Daxil ol
           </Link>
         </p>

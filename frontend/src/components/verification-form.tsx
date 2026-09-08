@@ -8,6 +8,7 @@ import { retryAfterSeconds, useRetryCountdown } from "@/hooks/use-retry-countdow
 
 import { ApiError, authApi } from "@/lib/api";
 import type { VerificationPurpose } from "@/lib/api";
+import { authHref, safeLocalRedirect } from "@/lib/routes";
 
 import { useAuth } from "./auth-provider";
 import { AuthButton, AuthFrame, AuthMessage } from "./auth-ui";
@@ -73,7 +74,7 @@ export function VerificationForm() {
     try {
       if (purpose === "registration") {
         await verifyEmail(email, code);
-        router.replace("/");
+        router.replace(safeLocalRedirect(searchParams.get("next")));
       } else {
         const response = await authApi.verifyPasswordReset(email, code);
         router.replace(
@@ -123,7 +124,7 @@ export function VerificationForm() {
     <AuthFrame
       title="Təsdiqləmə"
       subtitle="Kodu daxil edin"
-      backHref={purpose === "registration" ? "/register" : "/forgot-password"}
+      backHref={purpose === "registration" ? authHref("/register", searchParams.get("next")) : "/forgot-password"}
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-6 p-6 text-center">
         <div className="space-y-2">

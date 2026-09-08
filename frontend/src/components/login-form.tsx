@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 
 import { ApiError } from "@/lib/api";
-import { safeLocalRedirect } from "@/lib/routes";
+import { authHref, safeLocalRedirect } from "@/lib/routes";
 
 import { useAuth } from "./auth-provider";
 import {
@@ -65,7 +65,7 @@ export function LoginForm() {
       footer={
         <p className="text-[var(--hara-auth-secondary)]">
           Hesabın yoxdur?{" "}
-          <Link className="font-semibold text-[#4e55c5]" href="/register">
+          <Link className="font-semibold text-[#4e55c5]" href={authHref("/register", searchParams.get("next"))}>
             Qeydiyyatdan keç
           </Link>
         </p>
