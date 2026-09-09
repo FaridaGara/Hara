@@ -1,0 +1,226 @@
+.card,
+.canvasCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--hara-auth-field);
+}
+.card strong,
+.canvasCard > strong {
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 600;
+}
+.card p {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--hara-auth-secondary);
+}
+.canvasCard > strong {
+  font-size: 13px;
+  line-height: 18px;
+}
+.canvasCard small {
+  font-size: 12px;
+  color: var(--hara-auth-secondary);
+}
+.viewport {
+  width: 100%;
+  overflow: auto;
+  border-radius: 8px;
+}
+.zoomSurface {
+  min-width: 100%;
+}
+.canvas {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1000 / 650;
+  overflow: hidden;
+  background: var(--hara-auth-page);
+}
+.background {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+.noBackground {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  font-size: 12px;
+  color: var(--hara-auth-secondary);
+}
+.block {
+  position: absolute;
+  transform-origin: 0 0;
+}
+.activeBlock {
+  outline: 2px solid var(--hara-tab-active);
+  cursor: move;
+}
+.dot {
+  position: absolute;
+  border-radius: 3px;
+  background: #989a9d;
+}
+.assignedDot {
+  background: var(--hara-tab-active);
+}
+.blockedDot {
+  background: #ea5059;
+  opacity: 0.55;
+}
+.rowLabel {
+  position: absolute;
+  font-size: 7px;
+  line-height: 1;
+  color: #171717;
+  background: #ffffffcc;
+  border-radius: 2px;
+}
+.resizeHandle {
+  position: absolute;
+  bottom: -5px;
+  right: -5px;
+  width: 18px;
+  height: 18px;
+  background: var(--hara-tab-active);
+  cursor: nwse-resize;
+  touch-action: none;
+}
+.zoomControls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-size: 12px;
+}
+.zoomControls button {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--hara-auth-page);
+  color: var(--hara-auth-text);
+  font-size: 20px;
+  cursor: pointer;
+}
+.zoomControls button:disabled {
+  opacity: 0.35;
+}
+.preview {
+  width: 100%;
+  max-height: 300px;
+  object-fit: contain;
+  background: white;
+  border-radius: 8px;
+}
+.pages {
+  display: flex;
+  gap: 8px;
+  overflow: auto;
+}
+.pages button {
+  min-width: 90px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--hara-auth-field);
+  color: var(--hara-auth-text);
+  cursor: pointer;
+}
+.pages button[aria-pressed="true"] {
+  background: var(--hara-tab-active);
+  color: var(--hara-weekly-price-text);
+}
+.link {
+  min-height: 48px;
+  border: 0;
+  background: transparent;
+  color: var(--hara-tab-active);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.detail {
+  overflow: auto;
+}
+.seatRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  width: max-content;
+}
+.seatRow > strong {
+  width: 22px;
+  font-size: 13px;
+}
+.seat {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border: 2px solid transparent;
+  border-radius: 16px;
+  background: color-mix(
+    in srgb,
+    var(--hara-tab-active) 12%,
+    var(--hara-auth-field)
+  );
+  color: var(--hara-tab-active);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.seat[aria-pressed="true"] {
+  background: var(--hara-tab-active);
+  color: var(--hara-weekly-price-text);
+}
+.seat[data-blocked="true"] {
+  border-color: #ea5059;
+  text-decoration: line-through;
+}
+.seat:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  font-size: 14px;
+}
+.check input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--hara-tab-active);
+}
+.rowChoices {
+  max-height: 240px;
+  overflow: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.rowChoices label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  font-size: 14px;
+}
+.rowChoices input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--hara-tab-active);
+}
+.error {
+  border: 1px solid #ea5059;
+}

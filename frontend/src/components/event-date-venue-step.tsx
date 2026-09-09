@@ -1,5 +1,7 @@
 "use client";
 
+import { venuePlanKey } from "@/lib/seat-plan";
+
 import dynamic from "next/dynamic";
 import { useEffect, useState, type FormEvent } from "react";
 import { venuesApi, type VenueChoice } from "@/lib/api";
@@ -79,7 +81,7 @@ export function EventDateVenueStep({ draft, replaceDraft, save, notice, storageE
   function openView(next: typeof view) { save(false); setView(next); }
   function updateSchedule(next: EventSchedule, updateDuration = false) {
     const minutes = updateDuration ? scheduleMinutes(next) : null;
-    const planChanged = next.venue?.id !== schedule.venue?.id || next.venue?.plan_id !== schedule.venue?.plan_id;
+    const planChanged = venuePlanKey(next.venue) !== venuePlanKey(schedule.venue) || next.venue?.plan_id !== schedule.venue?.plan_id;
     replaceDraft({
       ...draft,
       schedule: next,

@@ -10,8 +10,8 @@ export function WizardIcon({ name, className = "hara-auth-icon" }: { name: strin
   return <Image src={`/figma/create-event/${name}.svg`} alt="" width={24} height={24} className={className} />;
 }
 
-export function WizardFrame({ subtitle, onBack, onSave, children }: {
-  subtitle: string; onBack?: () => void; onSave: () => void; children: ReactNode;
+export function WizardFrame({ title = "Tədbir yarat", subtitle, onBack, onSave, children }: {
+  title?: string; subtitle: string; onBack?: () => void; onSave: () => void; children: ReactNode;
 }) {
   return (
     <main className={`hara-auth ${styles.page}`}>
@@ -22,7 +22,7 @@ export function WizardFrame({ subtitle, onBack, onSave, children }: {
           ) : (
             <Link href="/" aria-label="Tədbir formasını bağla" className={styles.iconButton}><WizardIcon name="close" /></Link>
           )}
-          <div className={styles.heading}><p>Tədbir yarat</p><span>{subtitle}</span></div>
+          <div className={styles.heading}><p>{title}</p><span>{subtitle}</span></div>
           <button type="button" aria-label="Qaralamanı bu brauzerdə saxla" className={styles.iconButton} onClick={onSave}><WizardIcon name="save" /></button>
         </header>
         {children}

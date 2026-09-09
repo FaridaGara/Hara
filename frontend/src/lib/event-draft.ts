@@ -1,3 +1,4 @@
+import { readSeatPlan, type SeatPlanDraft } from "./seat-plan";
 import { emptySchedule, readSchedule, type EventSchedule } from "./event-schedule";
 
 // Drafts stay on this device until the remaining creation flow is ready.
@@ -39,6 +40,7 @@ export type EventSalesDraft = {
   seatPlanApplied: boolean;
   seatPlanSource: "venue" | "custom" | null;
   customPlanName: string;
+  seatPlan: SeatPlanDraft | null;
 };
 
 export function emptySales(): EventSalesDraft {
@@ -48,7 +50,7 @@ export function emptySales(): EventSalesDraft {
     salesStart: "published", salesStartDate: "", salesStartTime: "",
     salesEnd: "event_start", salesEndDate: "", salesEndTime: "",
     minPerOrder: "1", maxPerOrder: "6", refundPolicy: "",
-    seatPlanApplied: false, seatPlanSource: null, customPlanName: "",
+    seatPlanApplied: false, seatPlanSource: null, customPlanName: "", seatPlan: null,
   };
 }
 
@@ -107,6 +109,7 @@ function readSales(value: unknown): EventSalesDraft {
     seatPlanApplied: data.seatPlanApplied === true,
     seatPlanSource: data.seatPlanSource === "venue" || data.seatPlanSource === "custom" ? data.seatPlanSource : null,
     customPlanName: text("customPlanName", 160),
+    seatPlan: readSeatPlan(data.seatPlan),
   };
 }
 

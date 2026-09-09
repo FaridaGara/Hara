@@ -34,6 +34,7 @@ from apps.users.views import (
     UserProfileAPIView,
     VerificationResendAPIView,
 )
+from events.seat_plans import SeatPlanListAPIView, SeatPlanDetailAPIView
 from events.views import (
     AdminVenueDetailAPIView,
     AdminVenueListCreateAPIView,
@@ -82,6 +83,8 @@ urlpatterns = [
     ),
     path("api/", include("apps.core.urls")),
     path("api/events/", include("events.urls")),
+    path("api/seat-plans/", SeatPlanListAPIView.as_view(), name="seat-plan-list"),
+    path("api/seat-plans/<uuid:pk>/", SeatPlanDetailAPIView.as_view(), name="seat-plan-detail"),
     path("api/venues/", VenueChoiceListAPIView.as_view(), name="venue-choice-list"),
     path(
         "api/favorites/",

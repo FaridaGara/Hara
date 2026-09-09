@@ -12,7 +12,9 @@
     "android:sync": "cap sync android",
     "android:open": "cap open android",
     "android:install-tools": "bash scripts/install-android-toolchain.sh",
-    "android:build": "bash scripts/android-build.sh"
+    "android:build": "bash scripts/android-build.sh",
+    "prebuild": "node scripts/prepare-pdf.mjs",
+    "predev": "node scripts/prepare-pdf.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",
@@ -20,6 +22,7 @@
     "@googlemaps/js-api-loader": "^2.1.1",
     "@googlemaps/markerclusterer": "^2.6.2",
     "next": "16.2.11",
+    "pdfjs-dist": "6.3.289",
     "qrcode": "^1.5.4",
     "react": "19.2.4",
     "react-dom": "19.2.4"
