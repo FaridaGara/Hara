@@ -124,6 +124,43 @@
 :global(:root[data-theme="dark"]) .mapPin img { filter: brightness(0); }
 .mapNotice { position: absolute; inset: 8px 8px auto; border-radius: 12px; padding: 8px 12px; font-size: 12px; line-height: 16px; background: var(--hara-auth-page); color: var(--hara-auth-text); }
 
+.salesSection { display: flex; flex-direction: column; gap: 8px; }
+.salesSection h2, .sectionTitle { font-size: 16px; line-height: 22px; font-weight: 600; }
+.segmented { display: flex; gap: 2px; width: 100%; padding: 4px; border-radius: 999px; background: var(--hara-auth-field); }
+.segmented button { flex: 1; height: 40px; border: 0; border-radius: 999px; background: transparent; color: var(--hara-auth-text); font-size: 15px; line-height: 20px; cursor: pointer; }
+.segmented button[aria-pressed="true"] { background: var(--hara-tab-active); color: #fff; }
+.segmented button:focus-visible, .ticketCard:focus-visible, .addTicket:focus-visible, .salesSettings:focus-visible, .dangerAction:focus-visible { outline: 2px solid var(--hara-tab-active); outline-offset: 2px; }
+.sectionHeading { display: flex; align-items: center; gap: 8px; }
+.sectionHeading h2 { flex: 1; }
+.sectionHeading span { width: 90px; text-align: right; font-size: 13px; line-height: 18px; color: var(--hara-auth-secondary); }
+.ticketList { display: flex; flex-direction: column; }
+.ticketCard, .salesSettings { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 72px; padding: 0 12px; border: 0; border-radius: 16px; background: var(--hara-auth-field); color: var(--hara-auth-text); text-align: left; cursor: pointer; }
+.ticketCard + .ticketCard { margin-top: 8px; }
+.ticketIcon { display: grid; place-items: center; width: 40px; height: 40px; flex: none; border-radius: 999px; background: var(--hara-auth-field); }
+.ticketMain, .ticketMeta, .salesSettings > span:nth-child(2) { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.ticketMain, .salesSettings > span:nth-child(2) { flex: 1; }
+.ticketMeta { align-items: flex-end; text-align: right; }
+.ticketMain strong, .ticketMeta strong, .salesSettings strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; line-height: 20px; font-weight: 600; }
+.ticketMain small, .ticketMeta small, .salesSettings small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; line-height: 16px; color: var(--hara-auth-secondary); }
+.addTicket { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 48px; padding: 12px 16px; border: 0; border-radius: 16px; background: color-mix(in srgb, var(--hara-tab-active) 12%, transparent); color: var(--hara-tab-active); font-size: 16px; line-height: 21px; font-weight: 600; cursor: pointer; }
+.addTicket:disabled { opacity: .45; cursor: not-allowed; }
+.salesSettings { min-height: 72px; padding: 0 12px; background: transparent; }
+.assurance { font-size: 12px; line-height: 16px; color: var(--hara-auth-secondary); }
+.capacityError { display: flex; flex-direction: column; gap: 4px; color: #ff2c3d; font-size: 13px; line-height: 18px; }
+.capacityError button { align-self: flex-start; border: 0; background: transparent; color: inherit; font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }
+.commission { display: flex; flex-direction: column; gap: 4px; padding: 16px; border-radius: 16px; background: var(--hara-auth-field); }
+.commission strong { font-size: 13px; line-height: 18px; font-weight: 600; }
+.commission p { font-size: 15px; line-height: 20px; }
+.commission small { font-size: 12px; line-height: 16px; color: var(--hara-auth-secondary); }
+.dangerAction { align-self: flex-start; border: 0; background: transparent; color: #ff2c3d; font-size: 13px; font-weight: 600; cursor: pointer; }
+.planPreview, .planUpload { display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 16px; background: var(--hara-auth-field); }
+.planPreview > strong, .planUpload > strong { font-size: 16px; line-height: 21px; }
+.planPreview > p, .planUpload > p { font-size: 13px; line-height: 18px; color: var(--hara-auth-secondary); }
+.stage { display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 8px; background: var(--hara-auth-page); font-size: 12px; font-weight: 600; }
+.zone { display: flex; align-items: center; justify-content: center; min-height: 72px; padding: 12px 16px; border-radius: 16px; background: color-mix(in srgb, var(--hara-tab-active) 12%, transparent); color: var(--hara-tab-active); font-size: 15px; font-weight: 600; }
+.hiddenFile { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+.pending { color: var(--hara-tab-active) !important; font-weight: 600; }
+
 @media (prefers-color-scheme: dark) {
   :global(:root:not([data-theme])) .nextIcon { filter: brightness(0); }
   :global(:root:not([data-theme])) .mapPin img { filter: brightness(0); }

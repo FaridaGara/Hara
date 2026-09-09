@@ -79,7 +79,13 @@ export function EventDateVenueStep({ draft, replaceDraft, save, notice, storageE
   function openView(next: typeof view) { save(false); setView(next); }
   function updateSchedule(next: EventSchedule, updateDuration = false) {
     const minutes = updateDuration ? scheduleMinutes(next) : null;
-    replaceDraft({ ...draft, schedule: next, duration: minutes && minutes <= 99999 ? String(minutes) : draft.duration });
+    const planChanged = next.venue?.id !== schedule.venue?.id || next.venue?.plan_id !== schedule.venue?.plan_id;
+    replaceDraft({
+      ...draft,
+      schedule: next,
+      duration: minutes && minutes <= 99999 ? String(minutes) : draft.duration,
+      sales: planChanged ? { ...draft.sales, seatPlanApplied: false, seatPlanSource: null } : draft.sales,
+    });
   }
   function updateTime(kind: "start" | "end", date: string, time: string) {
     if (kind === "start") {

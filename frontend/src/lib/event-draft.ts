@@ -10,6 +10,48 @@ export const EVENT_LANGUAGES = [
   ["az", "Azərbaycanca"], ["en", "İngiliscə"], ["ru", "Rusca"], ["tr", "Türkcə"],
 ] as const;
 
+export type TicketPaymentType = "paid" | "free";
+export type AdmissionType = "general" | "seated";
+
+export type EventTicketDraft = {
+  id: string;
+  name: string;
+  paymentType: TicketPaymentType;
+  price: string;
+  quantity: string;
+  includes: string;
+  lastValidQuantity: string;
+};
+
+export type EventSalesDraft = {
+  admissionType: AdmissionType;
+  capacity: string;
+  tickets: EventTicketDraft[];
+  salesStart: "published" | "custom";
+  salesStartDate: string;
+  salesStartTime: string;
+  salesEnd: "event_start" | "custom";
+  salesEndDate: string;
+  salesEndTime: string;
+  minPerOrder: string;
+  maxPerOrder: string;
+  refundPolicy: "" | "non_refundable" | "until_24h" | "until_72h";
+  seatPlanApplied: boolean;
+  seatPlanSource: "venue" | "custom" | null;
+  customPlanName: string;
+};
+
+export function emptySales(): EventSalesDraft {
+  return {
+    admissionType: "general", capacity: "",
+    tickets: [{ id: "ticket-1", name: "Standart", paymentType: "paid", price: "", quantity: "", includes: "Tədbirə giriş", lastValidQuantity: "" }],
+    salesStart: "published", salesStartDate: "", salesStartTime: "",
+    salesEnd: "event_start", salesEndDate: "", salesEndTime: "",
+    minPerOrder: "1", maxPerOrder: "6", refundPolicy: "",
+    seatPlanApplied: false, seatPlanSource: null, customPlanName: "",
+  };
+}
+
 export type EventDraft = {
   title: string;
   category: string;
@@ -18,21 +60,59 @@ export type EventDraft = {
   language: string;
   duration: string;
   schedule: EventSchedule;
-  lastStep: 1 | 2;
+  sales: EventSalesDraft;
+  lastStep: 1 | 2 | 3;
 };
 
 export const EMPTY_EVENT_DRAFT: EventDraft = {
   title: "", category: "", description: "", age: "", language: "", duration: "",
-  schedule: emptySchedule(), lastStep: 1,
+  schedule: emptySchedule(), sales: emptySales(), lastStep: 1,
 };
 
 function draftKey(userId: number) {
-  return `hara.event-draft.v2:${userId}`;
+  return `hara.event-draft.v3:${userId}`;
+}
+
+function readSales(value: unknown): EventSalesDraft {
+  const empty = emptySales();
+  if (!value || typeof value !== "object" || Array.isArray(value)) return empty;
+  const data = value as Record<string, unknown>;
+  const text = (key: string, max: number) => typeof data[key] === "string" ? data[key].slice(0, max) : "";
+  const positiveInteger = (value: unknown, maxDigits = 7) => typeof value === "string" && new RegExp(`^\\d{0,${maxDigits}}$`).test(value) ? value : "";
+  const tickets = Array.isArray(data.tickets) ? data.tickets.flatMap((value, index) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+    const ticket = value as Record<string, unknown>;
+    const ticketText = (key: string, max: number) => typeof ticket[key] === "string" ? ticket[key].slice(0, max) : "";
+    const paymentType: TicketPaymentType = ticket.paymentType === "free" ? "free" : "paid";
+    const price = paymentType === "free" ? "" : (typeof ticket.price === "string" && /^\d{0,7}(?:\.\d{0,2})?$/.test(ticket.price) ? ticket.price : "");
+    const quantity = positiveInteger(ticket.quantity);
+    return [{
+      id: ticketText("id", 64) || `ticket-${index + 1}`,
+      name: ticketText("name", 80), paymentType, price, quantity,
+      includes: ticketText("includes", 200),
+      lastValidQuantity: positiveInteger(ticket.lastValidQuantity) || quantity,
+    }];
+  }).slice(0, 20) : [];
+  const refundPolicies = ["non_refundable", "until_24h", "until_72h"];
+  return {
+    admissionType: data.admissionType === "seated" ? "seated" : "general",
+    capacity: positiveInteger(data.capacity), tickets: tickets.length ? tickets : empty.tickets,
+    salesStart: data.salesStart === "custom" ? "custom" : "published",
+    salesStartDate: text("salesStartDate", 10), salesStartTime: text("salesStartTime", 5),
+    salesEnd: data.salesEnd === "custom" ? "custom" : "event_start",
+    salesEndDate: text("salesEndDate", 10), salesEndTime: text("salesEndTime", 5),
+    minPerOrder: positiveInteger(data.minPerOrder, 2) || "1",
+    maxPerOrder: positiveInteger(data.maxPerOrder, 2) || "6",
+    refundPolicy: refundPolicies.includes(String(data.refundPolicy)) ? data.refundPolicy as EventSalesDraft["refundPolicy"] : "",
+    seatPlanApplied: data.seatPlanApplied === true,
+    seatPlanSource: data.seatPlanSource === "venue" || data.seatPlanSource === "custom" ? data.seatPlanSource : null,
+    customPlanName: text("customPlanName", 160),
+  };
 }
 
 export function readEventDraft(userId: number): EventDraft {
   try {
-    const value: unknown = JSON.parse(window.localStorage.getItem(draftKey(userId)) || window.localStorage.getItem(`hara.event-draft.v1:${userId}`) || "null");
+    const value: unknown = JSON.parse(window.localStorage.getItem(draftKey(userId)) || window.localStorage.getItem(`hara.event-draft.v2:${userId}`) || window.localStorage.getItem(`hara.event-draft.v1:${userId}`) || "null");
     if (!value || typeof value !== "object" || Array.isArray(value)) return { ...EMPTY_EVENT_DRAFT };
     const draft = value as Record<string, unknown>;
     const text = (key: string, max: number) => typeof draft[key] === "string" ? draft[key].slice(0, max) : "";
@@ -43,7 +123,8 @@ export function readEventDraft(userId: number): EventDraft {
       age: EVENT_AGES.some((age) => age === draft.age) ? String(draft.age) : "",
       language: EVENT_LANGUAGES.some(([id]) => id === draft.language) ? String(draft.language) : "",
       duration: typeof draft.duration === "string" && /^\d{0,5}$/.test(draft.duration) ? draft.duration : "",
-      schedule: readSchedule(draft.schedule), lastStep: draft.lastStep === 2 ? 2 : 1,
+      schedule: readSchedule(draft.schedule), sales: readSales(draft.sales),
+      lastStep: draft.lastStep === 3 ? 3 : draft.lastStep === 2 ? 2 : 1,
     };
   } catch {
     return { ...EMPTY_EVENT_DRAFT };
