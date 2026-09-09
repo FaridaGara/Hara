@@ -23,8 +23,12 @@ def draft():
             'sales': {'admissionType': 'general', 'capacity': '60', 'tickets': [{'id': 'standard', 'name': 'Standart', 'paymentType': 'paid', 'price': '25', 'quantity': '58', 'includes': 'Giriş'}], 'salesStart': 'published', 'salesEnd': 'event_start', 'minPerOrder': '1', 'maxPerOrder': '6', 'refundPolicy': 'until_24h'}, 'media': {'cover': photo, 'gallery': [photo]}}
 
 
+@override_settings(ALLOWED_HOSTS=['localhost', 'testserver'])
 class SubmissionTests(APITestCase):
     def setUp(self):
+        # Generated media URLs go through the real URLField validator. Django's
+        # default "testserver" is not a valid public hostname; localhost is.
+        self.client.defaults['HTTP_HOST'] = 'localhost'
         self.owner = get_user_model().objects.create_user(email='review@example.com', password='Example9Pass', account_type='organizer', display_name='Organizer', phone_number='0501234567', is_email_verified=True)
         self.other = get_user_model().objects.create_user(email='other@example.com', password='Example9Pass')
         Category.objects.create(name='Musiqi', slug='musiqi')
@@ -148,7 +152,6 @@ class SubmissionTests(APITestCase):
         result = reserve_order(buyer=self.other, items=[{'ticket_type_id': ticket.pk, 'quantity': 1} for ticket in tickets])
         self.assertTrue(result.created)
 
-    @override_settings(ALLOWED_HOSTS=['localhost', 'testserver'])
     def test_staff_approval_publishes_only_after_revalidation(self):
         response = self.client.put(self.url, {'snapshot': self.data}, format='json', HTTP_HOST='localhost')
         self.assertEqual(response.status_code, 201)
