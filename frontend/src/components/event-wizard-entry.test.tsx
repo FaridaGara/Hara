@@ -106,6 +106,33 @@ describe("event creation authentication entry", () => {
     expect(navigation.replace).toHaveBeenCalledWith("/create-event?step=1");
   });
 
+  it("opens step three only after event details and schedule are complete", async () => {
+    setSession(session);
+    vi.spyOn(authApi, "me").mockResolvedValue(profile);
+    saveEventDraft(profile.id, {
+      ...EMPTY_EVENT_DRAFT,
+      title: "Caz", category: "musiqi", description: "Canlı musiqi", lastStep: 3,
+      schedule: {
+        ...emptySchedule(), startDate: "2099-10-28", startTime: "20:00", endDate: "2099-10-28", endTime: "22:00",
+        venue: { id: "venue-1", source: "catalog", name: "Muğam Mərkəzi", address: "Bakı", city: "Bakı", latitude: 40.4, longitude: 49.8, entry_note: "", plan_id: "plan-1", capacity: 420 },
+      },
+    });
+    navigation.searchParams = new URLSearchParams("step=3");
+    render(<AuthProvider><ProtectedRoute><EventWizard /></ProtectedRoute></AuthProvider>);
+    expect(await screen.findByRole("heading", { name: "Satış və biletlər" })).toBeTruthy();
+    expect(screen.getByText("Addım 3 / 5")).toBeTruthy();
+  });
+
+  it("falls back from a premature step-three URL to step two", async () => {
+    setSession(session);
+    vi.spyOn(authApi, "me").mockResolvedValue(profile);
+    saveEventDraft(profile.id, { ...EMPTY_EVENT_DRAFT, title: "Caz", category: "musiqi", description: "Canlı musiqi", lastStep: 3 });
+    navigation.searchParams = new URLSearchParams("step=3");
+    render(<AuthProvider><ProtectedRoute><EventWizard /></ProtectedRoute></AuthProvider>);
+    expect(await screen.findByRole("heading", { name: "Tarix və məkan" })).toBeTruthy();
+    expect(navigation.replace).toHaveBeenCalledWith("/create-event?step=2");
+  });
+
   it("carries the wizard destination through email registration and verification", async () => {
     navigation.searchParams = new URLSearchParams("next=%2Fcreate-event");
     vi.spyOn(authApi, "register").mockResolvedValue({ detail: "Sent", email: profile.email, retry_after: 60 });

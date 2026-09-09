@@ -8,7 +8,7 @@ import {
   EVENT_AGES, EVENT_CATEGORIES, EVENT_LANGUAGES,
   isEventDraftComplete, type EventDraft,
 } from "@/lib/event-draft";
-import { suggestedEnd } from "@/lib/event-schedule";
+import { isScheduleComplete, suggestedEnd } from "@/lib/event-schedule";
 import { useEventDraft } from "@/hooks/use-event-draft";
 
 import { useAuth } from "./auth-provider";
@@ -16,6 +16,7 @@ import { AuthMessage } from "./auth-ui";
 import { PageLoader } from "./states";
 import { WizardFrame, WizardIcon, WizardProgress } from "./event-wizard-layout";
 import { EventDateVenueStep } from "./event-date-venue-step";
+import { EventSalesTicketStep } from "./event-sales-ticket-step";
 import styles from "./event-wizard.module.css";
 
 function SelectField({ label, children, value, onChange, required = false }: {
@@ -124,23 +125,26 @@ function AccountEventWizard({ user }: { user: UserProfile }) {
   const searchParams = useSearchParams();
   const state = useEventDraft(user.id);
   const requested = searchParams.get("step");
-  const wantsSecond = requested === "2" || (!requested && state.draft.lastStep === 2);
-  const step = wantsSecond && isEventDraftComplete(state.draft) ? 2 : 1;
+  const canOpenSecond = isEventDraftComplete(state.draft);
+  const canOpenThird = canOpenSecond && isScheduleComplete(state.draft.schedule);
+  const wantsThird = requested === "3" || (!requested && state.draft.lastStep === 3);
+  const wantsSecond = wantsThird || requested === "2" || (!requested && state.draft.lastStep === 2);
+  const step = wantsThird && canOpenThird ? 3 : wantsSecond && canOpenSecond ? 2 : 1;
 
   useEffect(() => {
     // Canonical URLs let browser Back work as well as the wizard's own Back button.
     if (requested !== String(step)) router.replace(`/create-event?step=${step}`);
   }, [requested, router, step]);
 
-  function goTo(nextStep: 1 | 2) {
+  function goTo(nextStep: 1 | 2 | 3) {
     state.replaceDraft({ ...state.draft, lastStep: nextStep });
     state.save(false);
     router.push(`/create-event?step=${nextStep}`);
   }
 
-  return step === 1
-    ? <EventDetailsForm user={user} {...state} onNext={() => goTo(2)} />
-    : <EventDateVenueStep {...state} onBack={() => goTo(1)} />;
+  if (step === 1) return <EventDetailsForm user={user} {...state} onNext={() => goTo(2)} />;
+  if (step === 2) return <EventDateVenueStep {...state} onBack={() => goTo(1)} onNext={() => goTo(3)} />;
+  return <EventSalesTicketStep {...state} onBack={() => goTo(2)} />;
 }
 
 export function EventWizard() {
