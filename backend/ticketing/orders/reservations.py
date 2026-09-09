@@ -168,6 +168,12 @@ def reserve_order(*, buyer, items, idempotency_key=None):
             status_code=409,
         )
 
+    submission = getattr(event, "submission", None)
+    if submission:
+        limits = submission.snapshot["sales"]
+        if not int(limits["minPerOrder"]) <= sum(quantities.values()) <= int(limits["maxPerOrder"]):
+            raise OrderReservationError("Sifarişdəki ümumi bilet sayı tədbirin limitlərinə uyğun deyil.", status_code=400)
+
     current_inventory = inventory_quantities(
         ticket_type_ids,
         now=now,

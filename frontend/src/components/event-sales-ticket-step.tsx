@@ -157,8 +157,8 @@ function SalesSettings({ draft, updateDraft, onDone }: {
   </form>;
 }
 
-export function EventSalesTicketStep({ draft, replaceDraft, save, notice, storageError, onBack, onNext }: DraftState & {
-  onBack: () => void; onNext?: (draft: EventDraft) => void;
+export function EventSalesTicketStep({ draft, replaceDraft, save, notice, storageError, onBack, onNext, reviewEdit = false }: DraftState & {
+  onBack: () => void; onNext?: (draft: EventDraft) => void; reviewEdit?: boolean;
 }) {
   const [view, setView] = useState<View>("overview");
   const [ticketId, setTicketId] = useState(draft.sales.tickets[0]?.id || "ticket-1");
@@ -226,7 +226,7 @@ export function EventSalesTicketStep({ draft, replaceDraft, save, notice, storag
         {storageError ? <AuthMessage>Qaralama saxlanılmadı. <button type="button" className={styles.retry} onClick={() => save()}>Yenidən cəhd et</button></AuthMessage> : null}
         {notice ? <AuthMessage tone="success">{notice}</AuthMessage> : null}
       </div>
-      <footer className={styles.footer}><button type="submit" className={`${styles.next} ${styles.scheduleNext}`} disabled={!onNext || Boolean(error)}>Növbəti addım <WizardIcon name="next" className={styles.nextIcon} /></button><p>{error ? "Davam etmək üçün məlumatları tamamla" : "Növbəti: Media"}</p></footer>
+      <footer className={styles.footer}><button type="submit" className={`${styles.next} ${styles.scheduleNext}`} disabled={!onNext || Boolean(error)}>{reviewEdit ? "Dəyişiklikləri tətbiq et" : "Növbəti addım"} <WizardIcon name="next" className={styles.nextIcon} /></button><p>{error ? "Davam etmək üçün məlumatları tamamla" : reviewEdit ? "Yekun yoxlamaya qayıdacaqsan" : "Növbəti: Media"}</p></footer>
     </form>}
   </WizardFrame>;
 }

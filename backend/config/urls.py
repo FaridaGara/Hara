@@ -34,6 +34,7 @@ from apps.users.views import (
     UserProfileAPIView,
     VerificationResendAPIView,
 )
+from events.submissions import SubmissionEligibilityAPIView, SubmissionListAPIView, SubmissionDetailAPIView, SubmissionImageAPIView
 from events.seat_plans import SeatPlanListAPIView, SeatPlanDetailAPIView
 from events.views import (
     AdminVenueDetailAPIView,
@@ -82,6 +83,10 @@ urlpatterns = [
         name="api-docs",
     ),
     path("api/", include("apps.core.urls")),
+    path("api/event-submissions/eligibility/", SubmissionEligibilityAPIView.as_view(), name="submission-eligibility"),
+    path("api/event-submissions/", SubmissionListAPIView.as_view(), name="submission-list"),
+    path("api/event-submissions/<uuid:pk>/", SubmissionDetailAPIView.as_view(), name="submission-detail"),
+    path("api/event-submissions/<uuid:pk>/images/<int:index>/", SubmissionImageAPIView.as_view(), name="submission-image"),
     path("api/events/", include("events.urls")),
     path("api/seat-plans/", SeatPlanListAPIView.as_view(), name="seat-plan-list"),
     path("api/seat-plans/<uuid:pk>/", SeatPlanDetailAPIView.as_view(), name="seat-plan-detail"),

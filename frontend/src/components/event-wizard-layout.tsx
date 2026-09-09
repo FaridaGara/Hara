@@ -31,7 +31,7 @@ export function WizardFrame({ title = "Tədbir yarat", subtitle, onBack, onSave,
   );
 }
 
-export function WizardProgress({ step }: { step: 1 | 2 | 3 }) {
+export function WizardProgress({ step }: { step: 1 | 2 | 3 | 4 | 5 }) {
   return <div className={styles.progress}>
     <p>Addım {step} / 5</p>
     <div role="progressbar" aria-label="Tədbir yaratma mərhələsi" aria-valuemin={0} aria-valuemax={5} aria-valuenow={step}>

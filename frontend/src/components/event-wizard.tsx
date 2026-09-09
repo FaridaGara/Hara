@@ -1,12 +1,12 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 
 import type { UserProfile } from "@/lib/api";
 import {
   EVENT_AGES, EVENT_CATEGORIES, EVENT_LANGUAGES,
-  isEventDraftComplete, type EventDraft,
+  isEventDraftComplete, type EventDraft, type WizardStep,
 } from "@/lib/event-draft";
 import { isScheduleComplete, suggestedEnd } from "@/lib/event-schedule";
 import { useEventDraft } from "@/hooks/use-event-draft";
@@ -17,6 +17,9 @@ import { PageLoader } from "./states";
 import { WizardFrame, WizardIcon, WizardProgress } from "./event-wizard-layout";
 import { EventDateVenueStep } from "./event-date-venue-step";
 import { EventSalesTicketStep } from "./event-sales-ticket-step";
+import { EventMediaStep } from "./event-media-step";
+import { EventReviewStep } from "./event-review-step";
+import { salesError } from "@/lib/event-sales";
 import styles from "./event-wizard.module.css";
 
 function SelectField({ label, children, value, onChange, required = false }: {
@@ -42,8 +45,9 @@ export function EventDetailsStep({ user, onNext }: {
   return <EventDetailsForm user={user} onNext={onNext} {...state} />;
 }
 
-function EventDetailsForm({ user, onNext, draft, replaceDraft, save, notice, storageError }: {
+function EventDetailsForm({ user, onNext, draft, replaceDraft, save, notice, storageError, reviewEdit = false, onCancel }: {
   user: UserProfile; onNext?: (draft: EventDraft) => void;
+  reviewEdit?: boolean; onCancel?: () => void;
 } & ReturnType<typeof useEventDraft>) {
 
   function update<K extends keyof EventDraft>(key: K, value: EventDraft[K]) {
@@ -65,7 +69,7 @@ function EventDetailsForm({ user, onNext, draft, replaceDraft, save, notice, sto
   const displayName = user.display_name || [user.first_name, user.last_name].filter(Boolean).join(" ");
 
   return (
-    <WizardFrame subtitle={displayName ? `${displayName} adından` : "Öz adından"} onSave={() => save()}>
+    <WizardFrame onBack={onCancel} subtitle={displayName ? `${displayName} adından` : "Öz adından"} onSave={() => save()}>
         <form onSubmit={submit} onBlurCapture={() => save(false)} className={styles.form}>
           <div className={styles.content}>
             <WizardProgress step={1} />
@@ -111,9 +115,9 @@ function EventDetailsForm({ user, onNext, draft, replaceDraft, save, notice, sto
           </div>
           <footer className={styles.footer}>
             <button type="submit" className={styles.next} disabled={!onNext || !isEventDraftComplete(draft)} aria-describedby="event-next-step">
-              Növbəti addım <WizardIcon name="next" className={styles.nextIcon} />
+              {reviewEdit ? "Dəyişiklikləri tətbiq et" : "Növbəti addım"} <WizardIcon name="next" className={styles.nextIcon} />
             </button>
-            <p id="event-next-step">Növbəti: Tarix və məkan</p>
+            <p id="event-next-step">{reviewEdit ? "Yekun yoxlamaya qayıdacaqsan" : "Növbəti: Tarix və məkan"}</p>
           </footer>
         </form>
     </WizardFrame>
@@ -125,26 +129,41 @@ function AccountEventWizard({ user }: { user: UserProfile }) {
   const searchParams = useSearchParams();
   const state = useEventDraft(user.id);
   const requested = searchParams.get("step");
+  const [editing, setEditing] = useState<{ step: 1 | 2 | 3 | 4; draft: EventDraft } | null>(null);
   const canOpenSecond = isEventDraftComplete(state.draft);
   const canOpenThird = canOpenSecond && isScheduleComplete(state.draft.schedule);
-  const wantsThird = requested === "3" || (!requested && state.draft.lastStep === 3);
-  const wantsSecond = wantsThird || requested === "2" || (!requested && state.draft.lastStep === 2);
-  const step = wantsThird && canOpenThird ? 3 : wantsSecond && canOpenSecond ? 2 : 1;
+  const desired = Number(requested || state.draft.lastStep);
+  const highest = state.draft.lastStep === 5 ? 5 : !canOpenSecond ? 1 : !canOpenThird ? 2 : salesError(state.draft) ? 3 : 5;
+  // Submitted drafts reopen their status even if the event date has since passed.
+  const step = state.draft.submissionId && !editing ? 5 : Math.min([1,2,3,4,5].includes(desired) ? desired : 1, highest) as WizardStep;
 
   useEffect(() => {
-    // Canonical URLs let browser Back work as well as the wizard's own Back button.
     if (requested !== String(step)) router.replace(`/create-event?step=${step}`);
   }, [requested, router, step]);
 
-  function goTo(nextStep: 1 | 2 | 3) {
-    state.replaceDraft({ ...state.draft, lastStep: nextStep });
+  function goTo(nextStep: WizardStep, nextDraft = state.draft) {
+    state.replaceDraft({ ...nextDraft, lastStep: nextStep });
     state.save(false);
     router.push(`/create-event?step=${nextStep}`);
   }
-
+  function edit(step: 1 | 2 | 3 | 4) { setEditing({ step, draft: structuredClone(state.draft) }); }
+  function applyEdit() {
+    if (!editing) return;
+    goTo(5, editing.draft); setEditing(null);
+  }
+  if (editing) {
+    const editorState = { ...state, draft: editing.draft,
+      replaceDraft: (draft: EventDraft) => setEditing({ ...editing, draft }),
+      save: () => true, notice: null, storageError: false };
+    return <>
+      {editing.step === 1 ? <EventDetailsForm user={user} {...editorState} reviewEdit onCancel={() => setEditing(null)} onNext={applyEdit} /> : editing.step === 2 ? <EventDateVenueStep {...editorState} reviewEdit onBack={() => setEditing(null)} onNext={applyEdit} /> : editing.step === 3 ? <EventSalesTicketStep {...editorState} reviewEdit onBack={() => setEditing(null)} onNext={applyEdit} /> : <EventMediaStep {...editorState} reviewEdit onBack={() => setEditing(null)} onNext={applyEdit} />}
+    </>;
+  }
   if (step === 1) return <EventDetailsForm user={user} {...state} onNext={() => goTo(2)} />;
   if (step === 2) return <EventDateVenueStep {...state} onBack={() => goTo(1)} onNext={() => goTo(3)} />;
-  return <EventSalesTicketStep {...state} onBack={() => goTo(2)} />;
+  if (step === 3) return <EventSalesTicketStep {...state} onBack={() => goTo(2)} onNext={() => goTo(4)} />;
+  if (step === 4) return <EventMediaStep {...state} onBack={() => goTo(3)} onNext={() => goTo(5)} />;
+  return <EventReviewStep {...state} onEdit={edit} onBack={() => goTo(4)} onExit={() => router.push("/my-events")} />;
 }
 
 export function EventWizard() {

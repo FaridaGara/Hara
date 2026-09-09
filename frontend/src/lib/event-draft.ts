@@ -1,8 +1,7 @@
 import { readSeatPlan, type SeatPlanDraft } from "./seat-plan";
 import { emptySchedule, readSchedule, type EventSchedule } from "./event-schedule";
 
-// Drafts stay on this device until the remaining creation flow is ready.
-// Category slugs follow the existing discovery filters; no event is published here.
+// Drafts remain account-scoped on this device; submission is explicit.
 export const EVENT_CATEGORIES = [
   ["musiqi", "Musiqi"], ["teatr", "Teatr"], ["workshop", "Workshop"], ["idman", "İdman"],
 ] as const;
@@ -54,6 +53,9 @@ export function emptySales(): EventSalesDraft {
   };
 }
 
+export type WizardStep = 1 | 2 | 3 | 4 | 5;
+export type EventMediaDraft = { cover: string; gallery: string[] };
+
 export type EventDraft = {
   title: string;
   category: string;
@@ -63,7 +65,9 @@ export type EventDraft = {
   duration: string;
   schedule: EventSchedule;
   sales: EventSalesDraft;
-  lastStep: 1 | 2 | 3;
+  lastStep: WizardStep;
+  media?: EventMediaDraft;
+  submissionId?: string;
 };
 
 export const EMPTY_EVENT_DRAFT: EventDraft = {
@@ -72,7 +76,7 @@ export const EMPTY_EVENT_DRAFT: EventDraft = {
 };
 
 function draftKey(userId: number) {
-  return `hara.event-draft.v3:${userId}`;
+  return `hara.event-draft.v4:${userId}`;
 }
 
 function readSales(value: unknown): EventSalesDraft {
@@ -115,7 +119,7 @@ function readSales(value: unknown): EventSalesDraft {
 
 export function readEventDraft(userId: number): EventDraft {
   try {
-    const value: unknown = JSON.parse(window.localStorage.getItem(draftKey(userId)) || window.localStorage.getItem(`hara.event-draft.v2:${userId}`) || window.localStorage.getItem(`hara.event-draft.v1:${userId}`) || "null");
+    const value: unknown = JSON.parse(window.localStorage.getItem(draftKey(userId)) || window.localStorage.getItem(`hara.event-draft.v3:${userId}`) || window.localStorage.getItem(`hara.event-draft.v2:${userId}`) || window.localStorage.getItem(`hara.event-draft.v1:${userId}`) || "null");
     if (!value || typeof value !== "object" || Array.isArray(value)) return { ...EMPTY_EVENT_DRAFT };
     const draft = value as Record<string, unknown>;
     const text = (key: string, max: number) => typeof draft[key] === "string" ? draft[key].slice(0, max) : "";
@@ -127,7 +131,9 @@ export function readEventDraft(userId: number): EventDraft {
       language: EVENT_LANGUAGES.some(([id]) => id === draft.language) ? String(draft.language) : "",
       duration: typeof draft.duration === "string" && /^\d{0,5}$/.test(draft.duration) ? draft.duration : "",
       schedule: readSchedule(draft.schedule), sales: readSales(draft.sales),
-      lastStep: draft.lastStep === 3 ? 3 : draft.lastStep === 2 ? 2 : 1,
+      lastStep: [1, 2, 3, 4, 5].includes(Number(draft.lastStep)) ? Number(draft.lastStep) as WizardStep : 1,
+      media: readMedia(draft.media),
+      submissionId: typeof draft.submissionId === "string" && /^[0-9a-f-]{36}$/i.test(draft.submissionId) ? draft.submissionId : undefined,
     };
   } catch {
     return { ...EMPTY_EVENT_DRAFT };
@@ -150,4 +156,10 @@ export function isEventDraftComplete(draft: EventDraft) {
     draft.description.trim() && draft.description.length <= 1000 &&
     (!draft.duration || (/^\d{1,5}$/.test(draft.duration) && Number(draft.duration) > 0)),
   );
+}
+
+export function readMedia(value: unknown): EventMediaDraft {
+  const data = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  const image = (v: unknown): v is string => typeof v === "string" && v.length <= 250_000 && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(v);
+  return { cover: image(data.cover) ? data.cover : "", gallery: Array.isArray(data.gallery) ? data.gallery.filter(image).slice(0, 4) : [] };
 }

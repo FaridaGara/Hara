@@ -170,3 +170,30 @@
   .page { padding: 32px 24px; }
   .shell { min-height: max(790px, calc(100dvh - 64px)); border-radius: 32px; overflow: clip; }
 }
+
+.reviewIntro h1 { font-size: 24px; line-height: 32px; }
+.reviewIntro p { font-size: 14px; line-height: 20px; }
+.reviewRow { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 72px; padding: 0 12px; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.reviewRow > span:nth-child(2) { flex: 1; min-width: 0; padding: 16px 0; border-bottom: 1px solid var(--hara-auth-muted); display: flex; flex-direction: column; gap: 4px; }
+.reviewRow strong { font-size: 15px; line-height: 20px; font-weight: 600; }
+.reviewRow small { font-size: 12px; line-height: 16px; overflow-wrap: anywhere; }
+.reviewRow > img { width: 16px; height: 16px; flex: none; }
+.reviewRow:focus-visible { outline: 2px solid var(--hara-tab-active); border-radius: 12px; }
+.reviewNotice { display: flex; flex-direction: column; gap: 6px; border-radius: 12px; padding: 12px; background: color-mix(in srgb, var(--hara-tab-active) 12%, transparent); }
+.reviewNotice strong { font-size: 15px; line-height: 20px; }
+.reviewNotice p { font-size: 13px; line-height: 18px; color: var(--hara-auth-secondary); }
+.reviewPreview { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; padding: 12px 16px; border-radius: 12px; background: color-mix(in srgb, var(--hara-tab-active) 12%, transparent); color: var(--hara-tab-active); font-size: 15px; font-weight: 600; cursor: pointer; }
+.reviewPreview:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.reviewCover { width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 20px; }
+.reviewGallery { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.reviewGallery img { width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: cover; border-radius: 12px; }
+.reviewDescription { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; line-height: 22px; }
+.reviewDetails { display: flex; flex-direction: column; gap: 12px; }
+.reviewDetails > div { display: flex; flex-direction: column; gap: 4px; }
+.reviewDetails dt { font-size: 13px; color: var(--hara-auth-secondary); }
+.reviewDetails dd { font-size: 15px; line-height: 21px; overflow-wrap: anywhere; }
+.reviewStatus { margin-block: 24px; display: flex; flex-direction: column; gap: 12px; }
+.reviewStatus h1 { font-size: 24px; line-height: 32px; }
+.reviewStatus p { font-size: 15px; line-height: 22px; color: var(--hara-auth-secondary); }
+.reviewIssue { color: #de2637; font-size: 14px; line-height: 20px; padding: 12px; border: 1px solid currentColor; border-radius: 12px; display: flex; flex-direction: column; gap: 8px; }
+.reviewIssue button { align-self: flex-start; text-decoration: underline; font-weight: 600; cursor: pointer; }

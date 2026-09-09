@@ -577,6 +577,8 @@ class OrganizerEventDetailAPIView(RetrieveUpdateDestroyAPIView):
     def update(self, request, *args, **kwargs):
         event = self.get_object()
 
+        if hasattr(event, "submission") and not request.user.is_superuser:
+            return Response({"detail": "Bu tədbiri yekun yoxlama axınından idarə et."}, status=409)
         if self.has_ticket_sales(event):
             return Response(
                 {
@@ -593,6 +595,8 @@ class OrganizerEventDetailAPIView(RetrieveUpdateDestroyAPIView):
     def destroy(self, request, *args, **kwargs):
         event = self.get_object()
 
+        if hasattr(event, "submission"):
+            return Response({"detail": "Göndərilmiş tədbir silinə bilməz."}, status=409)
         # Refunded/cancelled biletlər də audit tarixçəsi kimi saxlanılır.
         if event.tickets.exists():
             return Response(
