@@ -263,7 +263,7 @@ export function EventSalesTicketStep({ draft, replaceDraft, save, notice, storag
           <button type="button" className={styles.addTicket} onClick={addTicket} disabled={draft.sales.tickets.length >= 20 || (capacity !== null && allocated >= capacity)}>Bilet növü əlavə et</button>
           {draft.sales.admissionType === "seated" ? <button type="button" className={styles.addTicket} onClick={() => open("plan")}>Planı və qiymətləri dəyiş</button> : null}
         </section>
-        <button type="button" className={styles.salesSettings} onClick={() => open("sales")}>
+        <button type="button" className={styles.salesSettings} onClick={() => open("sales")} aria-label="Satış vaxtı və qaydalar">
           <span className={styles.ticketIcon}><WizardIcon name="ticket" /></span><span><strong>Satış vaxtı və qaydalar</strong><small>{salesSummary(draft)}</small></span><WizardIcon name="forward" />
         </button>
         <p className={styles.assurance}>Hər bilet üçün unikal giriş QR-ı yaradılacaq.</p>
