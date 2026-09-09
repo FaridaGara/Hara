@@ -1,9 +1,11 @@
+import { planIssues, saleSeats, venuePlanKey } from "./seat-plan";
 import type { EventDraft, EventSalesDraft, EventTicketDraft } from "./event-draft";
 import { wallTime } from "./event-schedule";
 
 export const HARA_COMMISSION_RATE = 0.08;
 
 export function salesCapacity(draft: EventDraft) {
+  if (draft.sales.admissionType === "seated" && draft.sales.seatPlanApplied && draft.sales.seatPlan?.venueKey === venuePlanKey(draft.schedule.venue)) return saleSeats(draft.sales.seatPlan).length || null;
   const value = draft.schedule.venue?.capacity ?? Number(draft.sales.capacity);
   return Number.isInteger(value) && value > 0 ? value : null;
 }
@@ -58,7 +60,12 @@ export function salesError(draft: EventDraft) {
   if (!draft.sales.tickets.length) return "Ən azı bir bilet növü əlavə et.";
   const invalidTicket = draft.sales.tickets.find((ticket) => ticketError(ticket, draft));
   if (invalidTicket) return ticketError(invalidTicket, draft);
-  if (draft.sales.admissionType === "seated" && !draft.sales.seatPlanApplied) return "Oturacaq planını tətbiq et.";
+  if (draft.sales.admissionType === "seated") {
+    const plan = draft.sales.seatPlan;
+    if (!draft.sales.seatPlanApplied || !plan || plan.venueKey !== venuePlanKey(draft.schedule.venue)) return "Oturacaq planını tətbiq et.";
+    const issues = planIssues(plan, draft.schedule.venue?.capacity ?? Number(draft.sales.capacity));
+    if (issues.length) return issues[0];
+  }
   const minimum = Number(draft.sales.minPerOrder);
   const maximum = Number(draft.sales.maxPerOrder);
   if (!Number.isInteger(minimum) || minimum <= 0 || !Number.isInteger(maximum) || maximum < minimum) {

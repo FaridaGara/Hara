@@ -509,3 +509,19 @@ class Notification(models.Model):
 
     def __str__(self):
         return f"{self.user} — {self.title}"
+
+
+class SeatingLayoutTemplate(models.Model):
+    """Private reusable geometry; never modifies published inventory or prices."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="seating_layouts")
+    venue_key = models.CharField(max_length=750)
+    name = models.CharField(max_length=160)
+    layout = models.JSONField()
+    seat_count = models.PositiveIntegerField()
+    blocked_count = models.PositiveIntegerField()
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+        indexes = [models.Index(fields=["owner", "venue_key"], name="seat_layout_owner_venue_idx")]

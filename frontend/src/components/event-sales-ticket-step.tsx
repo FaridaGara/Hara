@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 
 import type { EventDraft, EventTicketDraft } from "@/lib/event-draft";
 import {
@@ -13,6 +13,8 @@ import type { useEventDraft } from "@/hooks/use-event-draft";
 import { AuthMessage } from "./auth-ui";
 import { WizardFrame, WizardIcon, WizardProgress } from "./event-wizard-layout";
 import styles from "./event-wizard.module.css";
+import dynamic from "next/dynamic";
+const SeatPlanEditor = dynamic(() => import("./seat-plan-editor").then(m => m.SeatPlanEditor));
 
 type DraftState = ReturnType<typeof useEventDraft>;
 type View = "overview" | "ticket" | "sales" | "plan";
@@ -155,55 +157,6 @@ function SalesSettings({ draft, updateDraft, onDone }: {
   </form>;
 }
 
-function SeatPlan({ draft, updateDraft, onDone }: {
-  draft: EventDraft; updateDraft: (draft: EventDraft) => void; onDone: () => void;
-}) {
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [fileError, setFileError] = useState<string | null>(null);
-  const capacity = salesCapacity(draft);
-  const venuePlan = Boolean(draft.schedule.venue?.plan_id);
-  const source = draft.sales.seatPlanSource ?? (venuePlan ? "venue" : "custom");
-  function update(patch: Partial<typeof draft.sales>) { updateDraft({ ...draft, sales: { ...draft.sales, ...patch } }); }
-  function selectFile(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const allowed = ["application/pdf", "image/png", "image/jpeg"];
-    if (!allowed.includes(file.type) || file.size > 10 * 1024 * 1024) {
-      setFileError("Fayl açıla bilmir. PDF, PNG və ya JPG formatında, maksimum 10 MB fayl seç.");
-      event.target.value = "";
-      return;
-    }
-    setFileError(null);
-    update({ customPlanName: file.name.slice(0, 160), seatPlanSource: "custom", seatPlanApplied: false });
-  }
-  function apply() {
-    if (!capacity || (source === "custom" && !draft.sales.customPlanName)) return;
-    update({ seatPlanSource: source, seatPlanApplied: true });
-    onDone();
-  }
-  return <div className={styles.form}>
-    <div className={styles.content}>
-      <WizardProgress step={3} />
-      <div className={styles.introduction}><h1>Oturacaq planı</h1><p>{draft.schedule.venue?.name}</p></div>
-      <div className={styles.segmented} aria-label="Oturacaq planının mənbəyi">
-        {venuePlan ? <button type="button" aria-pressed={source === "venue"} onClick={() => update({ seatPlanSource: "venue", seatPlanApplied: false })}>Hazır plan</button> : null}
-        <button type="button" aria-pressed={source === "custom"} onClick={() => update({ seatPlanSource: "custom", seatPlanApplied: false })}>Öz planım</button>
-      </div>
-      {source === "venue" ? <div className={styles.planPreview}>
-        <strong>Hazır plan · {capacity} oturacaq</strong><span className={styles.stage}>SƏHNƏ</span><span className={styles.zone}>Ümumi zona · {capacity} yer</span>
-        <p>{capacity} yer satışa açılacaq · Yer nömrələri qorunur.</p>
-      </div> : <div className={styles.planUpload}>
-        <strong>Öz planını əlavə et</strong><p>PDF, PNG və ya JPG faylını seç. Plan redaktorda ayrıca yoxlanacaq.</p>
-        <input ref={fileRef} className={styles.hiddenFile} type="file" accept="application/pdf,image/png,image/jpeg" onChange={selectFile} aria-label="Oturacaq planı faylı" />
-        <button type="button" className={styles.addTicket} onClick={() => fileRef.current?.click()}>{draft.sales.customPlanName || "Fayl seç"}</button>
-        {fileError ? <p className={styles.timeError} role="alert">{fileError}</p> : null}
-        {draft.sales.customPlanName ? <p className={styles.pending}>Yüklənmiş plan · təsdiq gözləyir</p> : null}
-      </div>}
-    </div>
-    <footer className={styles.footer}><button type="button" className={styles.next} disabled={!capacity || (source === "custom" && !draft.sales.customPlanName)} onClick={apply}>Planı tətbiq et</button><p>{capacity ?? 0} oturacaq · Nömrəli giriş</p></footer>
-  </div>;
-}
-
 export function EventSalesTicketStep({ draft, replaceDraft, save, notice, storageError, onBack, onNext }: DraftState & {
   onBack: () => void; onNext?: (draft: EventDraft) => void;
 }) {
@@ -232,13 +185,15 @@ export function EventSalesTicketStep({ draft, replaceDraft, save, notice, storag
     ? `${capacity ?? "—"} yerlik məkan · Hazır plan mövcuddur`
     : `${draft.schedule.venue?.name || "Yeni məkan"} · Hazır plan yoxdur`;
 
+  if (view === "plan") return <SeatPlanEditor draft={draft} updateDraft={updateDraft} save={save} onDone={() => open("overview")} />;
+
   return <WizardFrame subtitle={draft.title} onSave={() => save()} onBack={() => {
     save(false);
     if (view !== "overview") setView("overview"); else onBack();
   }}>
     {view === "ticket" && currentTicket ? <TicketEditor draft={draft} updateDraft={updateDraft} ticketId={ticketId} onDone={() => open("overview")} onDelete={() => {
       updateSales({ tickets: draft.sales.tickets.filter((ticket) => ticket.id !== ticketId) }); open("overview");
-    }} /> : view === "sales" ? <SalesSettings draft={draft} updateDraft={updateDraft} onDone={() => open("overview")} /> : view === "plan" ? <SeatPlan draft={draft} updateDraft={updateDraft} onDone={() => open("overview")} /> :
+    }} /> : view === "sales" ? <SalesSettings draft={draft} updateDraft={updateDraft} onDone={() => open("overview")} /> :
     <form className={styles.form} onSubmit={submit} onBlurCapture={() => save(false)}>
       <div className={styles.content}>
         <WizardProgress step={3} />
@@ -259,8 +214,8 @@ export function EventSalesTicketStep({ draft, replaceDraft, save, notice, storag
         </section>
         <section className={styles.salesSection} aria-labelledby="ticket-types-heading">
           <div className={styles.sectionHeading}><h2 id="ticket-types-heading">Bilet növləri</h2><span>{allocated} / {capacity ?? "—"} yer</span></div>
-          <div className={styles.ticketList}>{draft.sales.tickets.map((ticket) => <TicketCard key={ticket.id} ticket={ticket} seated={draft.sales.admissionType === "seated"} onEdit={() => { setTicketId(ticket.id); open("ticket"); }} />)}</div>
-          <button type="button" className={styles.addTicket} onClick={addTicket} disabled={draft.sales.tickets.length >= 20 || (capacity !== null && allocated >= capacity)}>Bilet növü əlavə et</button>
+          <div className={styles.ticketList}>{draft.sales.tickets.map((ticket) => <TicketCard key={ticket.id} ticket={ticket} seated={draft.sales.admissionType === "seated"} onEdit={() => { if (draft.sales.admissionType === "seated") open("plan"); else { setTicketId(ticket.id); open("ticket"); } }} />)}</div>
+          <button type="button" className={styles.addTicket} onClick={addTicket} disabled={draft.sales.admissionType === "seated" || draft.sales.tickets.length >= 20 || (capacity !== null && allocated >= capacity)}>Bilet növü əlavə et</button>
           {draft.sales.admissionType === "seated" ? <button type="button" className={styles.addTicket} onClick={() => open("plan")}>Planı və qiymətləri dəyiş</button> : null}
         </section>
         <button type="button" className={styles.salesSettings} onClick={() => open("sales")} aria-label="Satış vaxtı və qaydalar">
