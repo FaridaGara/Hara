@@ -1,10 +1,15 @@
+from django import forms
 from django.contrib import admin
+from django.core.exceptions import ValidationError
+from django.db import transaction
+from rest_framework.exceptions import ValidationError as APIValidationError
 from django.contrib.gis.admin import GISModelAdmin
 
 from .models import (
     Category,
     Event,
     EventPhoto,
+    EventSubmission,
     Favorite,
     Notification,
     OrganizerFollow,
@@ -13,6 +18,7 @@ from .models import (
     VenueSeat,
     VenueSection,
 )
+from .submissions import validate_snapshot, eligibility
 
 
 @admin.register(Category)
@@ -153,3 +159,55 @@ class NotificationAdmin(admin.ModelAdmin):
     search_fields = ("user__email", "title", "body", "event__title")
     autocomplete_fields = ("user", "event", "organizer")
     readonly_fields = ("created_at",)
+
+
+class SubmissionAdminForm(forms.ModelForm):
+    class Meta:
+        model = EventSubmission
+        fields = ['status', 'note']
+
+    def clean(self):
+        data = super().clean()
+        if data.get('status') == 'changes_requested' and not data.get('note', '').strip():
+            self.add_error('note', 'Düzəliş səbəbini yaz.')
+        if self.instance.pk and self.instance.event.status != 'draft':
+            raise ValidationError('Yayımlanmış tədbirin moderasiya qərarı dəyişdirilə bilməz.')
+        return data
+
+
+@admin.register(EventSubmission)
+class EventSubmissionAdmin(admin.ModelAdmin):
+    form = SubmissionAdminForm
+    list_display = ('event', 'owner', 'status', 'created_at')
+    list_filter = ('status',)
+    search_fields = ('event__title', 'owner__email')
+    readonly_fields = ('id', 'owner', 'event', 'snapshot', 'fingerprint', 'created_at', 'updated_at')
+    actions = ['approve_and_publish']
+
+    def has_add_permission(self, request): return False
+    def has_delete_permission(self, request, obj=None): return False
+
+    @admin.action(description='Yoxlamanı təsdiqlə və yayımla')
+    def approve_and_publish(self, request, queryset):
+        for pk in queryset.values_list('pk', flat=True):
+            try:
+                with transaction.atomic():
+                    item = EventSubmission.objects.select_for_update().select_related('owner', 'event__venue').get(pk=pk)
+                    event = Event.objects.select_for_update().get(pk=item.event_id)
+                    if event.status != 'draft' or item.status != 'pending':
+                        raise ValidationError('Yalnız yoxlanılan qaralama yayımlana bilər.')
+                    gate = eligibility(item.owner)
+                    if not gate['eligible']: raise ValidationError(gate['detail'])
+                    validate_snapshot(item.snapshot)
+                    if event.venue_plan_id:
+                        VenuePlan.objects.filter(pk=event.venue_plan_id).update(status='published')
+                    event.venue.is_active = True
+                    event.venue.save(update_fields=['is_active'])
+                    event.status = 'published'
+                    event.full_clean()
+                    event.save(update_fields=['status', 'published_at', 'updated_at'])
+                    self.log_change(request, item, 'Tədbir moderasiyadan sonra yayımlandı.')
+            except (ValidationError, APIValidationError) as error:
+                self.message_user(request, f'{pk}: {error}', level='ERROR')
+            else:
+                self.message_user(request, f'{event.title}: yayımlandı.')

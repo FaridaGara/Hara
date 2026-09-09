@@ -56,8 +56,8 @@ function VenueSearch({ query, onQuery, onSelect }: {
   </>;
 }
 
-export function EventDateVenueStep({ draft, replaceDraft, save, notice, storageError, onBack, onNext }: ReturnType<typeof useEventDraft> & {
-  onBack: () => void; onNext?: (draft: EventDraft) => void;
+export function EventDateVenueStep({ draft, replaceDraft, save, notice, storageError, onBack, onNext, reviewEdit = false }: ReturnType<typeof useEventDraft> & {
+  onBack: () => void; onNext?: (draft: EventDraft) => void; reviewEdit?: boolean;
 }) {
   const [view, setView] = useState<"details" | "search" | "manual">("details");
   const [query, setQuery] = useState("");
@@ -190,8 +190,8 @@ export function EventDateVenueStep({ draft, replaceDraft, save, notice, storageE
           <button type="submit" className={styles.next} disabled={!manualComplete}>Təsdiqlə və əlavə et</button>
           <p>Tədbirinin tarix və saatı dəyişmir</p>
         </> : <>
-          <button type="submit" className={`${styles.next} ${styles.scheduleNext}`} disabled={!onNext || !isScheduleComplete(schedule, now)} aria-describedby="event-date-next">Növbəti addım <WizardIcon name="next" className={styles.nextIcon} /></button>
-          <p id="event-date-next">{nextHint}</p>
+          <button type="submit" className={`${styles.next} ${styles.scheduleNext}`} disabled={!onNext || !isScheduleComplete(schedule, now)} aria-describedby="event-date-next">{reviewEdit ? "Dəyişiklikləri tətbiq et" : "Növbəti addım"} <WizardIcon name="next" className={styles.nextIcon} /></button>
+          <p id="event-date-next">{reviewEdit ? "Yekun yoxlamaya qayıdacaqsan" : nextHint}</p>
         </>}
       </footer>
     </form>

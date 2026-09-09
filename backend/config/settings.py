@@ -327,3 +327,6 @@ AUTH_VERIFY_IP_WINDOW_SECONDS = int(os.getenv("AUTH_VERIFY_IP_WINDOW_SECONDS", "
 
 # Bounded cleanup runs on auth traffic in the existing service, without cron.
 AUTH_MAINTENANCE_ENABLED = os.getenv("AUTH_MAINTENANCE_ENABLED", "true").lower() == "true"
+
+# Bounded media + seating snapshot in the explicit review submission.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 4_000_000

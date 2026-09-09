@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { authApi } from "@/lib/api";
+import { eventSubmissionsApi } from "@/lib/api/event-submissions";
 import { setSession } from "@/lib/auth/session";
 
 import { AuthProvider, useAuth } from "./auth-provider";
@@ -51,6 +52,28 @@ function GoogleCompletion() {
 }
 
 describe("event creation authentication entry", () => {
+  it("keeps review edits isolated until applied and cancels without changing the draft", async () => {
+    setSession(session);
+    vi.spyOn(authApi, "me").mockResolvedValue(profile);
+    vi.spyOn(eventSubmissionsApi, "eligibility").mockResolvedValue({ eligible: true, detail: "Hazırdır" });
+    saveEventDraft(profile.id, { ...structuredClone(EMPTY_EVENT_DRAFT), title: "Caz", category: "musiqi", description: "Canlı musiqi", lastStep: 5 });
+    render(<AuthProvider><ProtectedRoute><EventWizard /></ProtectedRoute></AuthProvider>);
+    await screen.findByText("Təşkilatçı hesabı hazırdır");
+    await userEvent.click(screen.getByRole("button", { name: /Əsas məlumatlar: Caz/ }));
+    fill("Tədbirin adı", "Ləğv ediləcək ad");
+    fireEvent.blur(screen.getByLabelText("Tədbirin adı"));
+    expect(readEventDraft(profile.id).title).toBe("Caz");
+    await userEvent.click(screen.getByRole("button", { name: "Əvvəlki mərhələyə qayıt" }));
+    await screen.findByText("Təşkilatçı hesabı hazırdır");
+    await userEvent.click(screen.getByRole("button", { name: /Əsas məlumatlar: Caz/ }));
+    expect((screen.getByLabelText("Tədbirin adı") as HTMLInputElement).value).toBe("Caz");
+    fill("Tədbirin adı", "Yeni caz gecəsi");
+    await userEvent.click(screen.getByRole("button", { name: "Dəyişiklikləri tətbiq et" }));
+    expect(await screen.findByRole("heading", { name: "Yoxla və yayımla" })).toBeTruthy();
+    expect(readEventDraft(profile.id).title).toBe("Yeni caz gecəsi");
+    expect(readEventDraft(profile.id).lastStep).toBe(5);
+  });
+
   it("links the home action to a protected wizard and does not expose the form before sign-in", async () => {
     render(<AuthProvider><HomeAddButton /><ProtectedRoute><EventWizard /></ProtectedRoute></AuthProvider>);
     expect(screen.getByRole("link", { name: "Tədbir əlavə et" }).getAttribute("href")).toBe("/create-event");
@@ -64,7 +87,7 @@ describe("event creation authentication entry", () => {
     render(<AuthProvider><AppShell><ProtectedRoute><EventWizard /></ProtectedRoute></AppShell></AuthProvider>);
     expect(await screen.findByRole("heading", { name: "Əsas məlumatlar" })).toBeTruthy();
     expect(screen.getByText("Aysel Məmmədova adından")).toBeTruthy();
-    expect(navigation.replace).toHaveBeenCalledWith("/create-event?step=1");
+    await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith("/create-event?step=1"));
     expect(screen.queryByRole("link", { name: "Hara ana səhifə" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Çıxış" })).toBeNull();
   });
@@ -103,7 +126,7 @@ describe("event creation authentication entry", () => {
     navigation.searchParams = new URLSearchParams("step=2");
     render(<AuthProvider><ProtectedRoute><EventWizard /></ProtectedRoute></AuthProvider>);
     expect(await screen.findByRole("heading", { name: "Əsas məlumatlar" })).toBeTruthy();
-    expect(navigation.replace).toHaveBeenCalledWith("/create-event?step=1");
+    await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith("/create-event?step=1"));
   });
 
   it("opens step three only after event details and schedule are complete", async () => {

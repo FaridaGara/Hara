@@ -233,7 +233,11 @@ class OrganizerTicketTypeListCreateAPIView(
         return context
 
     def perform_create(self, serializer):
-        serializer.save(event=self.get_event())
+        event = self.get_event()
+        if hasattr(event, "submission") and not self.request.user.is_superuser:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Göndərilmiş tədbirin biletlərini yekun yoxlamadan dəyiş.")
+        serializer.save(event=event)
 
 
 @extend_schema_view(
@@ -307,6 +311,8 @@ class OrganizerTicketTypeDetailAPIView(
             pk=kwargs["pk"],
         )
 
+        if hasattr(ticket_type.event, "submission") and not request.user.is_superuser:
+            return Response({"detail": "Göndərilmiş tədbirin biletlərini yekun yoxlamadan dəyiş."}, status=409)
         if self.has_ticket_sales(ticket_type):
             submitted_fields = set(request.data.keys())
             allowed_fields = {"is_active"}
@@ -363,6 +369,8 @@ class OrganizerTicketTypeDetailAPIView(
     def destroy(self, request, *args, **kwargs):
         ticket_type = self.get_object()
 
+        if hasattr(ticket_type.event, "submission"):
+            return Response({"detail": "Göndərilmiş tədbirin bileti silinə bilməz."}, status=409)
         if self.has_ticket_sales(ticket_type):
             return Response(
                 {

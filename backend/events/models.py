@@ -525,3 +525,23 @@ class SeatingLayoutTemplate(models.Model):
     class Meta:
         ordering = ["-updated_at"]
         indexes = [models.Index(fields=["owner", "venue_key"], name="seat_layout_owner_venue_idx")]
+
+
+class EventSubmission(models.Model):
+    """Account-owned, idempotent review request and immutable submitted snapshot."""
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Yoxlanılır'
+        CHANGES_REQUESTED = 'changes_requested', 'Düzəliş tələb olunur'
+
+    id = models.UUIDField(primary_key=True, editable=False)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='event_submissions')
+    event = models.OneToOneField(Event, on_delete=models.PROTECT, related_name='submission')
+    snapshot = models.JSONField()
+    fingerprint = models.CharField(max_length=64)
+    status = models.CharField(max_length=24, choices=Status.choices, default=Status.PENDING)
+    note = models.TextField(blank=True, max_length=2000)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
