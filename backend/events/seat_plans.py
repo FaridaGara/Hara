@@ -75,6 +75,7 @@ def validate_layout(data):
     if not isinstance(categories, list) or not 1 <= len(categories) <= 20 or not isinstance(blocks, list) or not 1 <= len(blocks) <= 50:
         fail('Planın bölmə və qiymət kateqoriyalarını tamamla.')
     category_ids = set()
+    unpriced = set()
     for category in categories:
         if not isinstance(category, dict) or not text(category.get('id'), 100) or not text(category.get('name'), 80) or not isinstance(category.get('free'), bool) or not isinstance(category.get('price'), str):
             fail('Qiymət kateqoriyası düzgün deyil.')
@@ -82,7 +83,7 @@ def validate_layout(data):
             fail('Kateqoriya identifikatorları təkrarlanır.')
         category_ids.add(category['id'])
         if not category['free'] and (not re.fullmatch(r'\d{1,7}(\.\d{1,2})?', category['price']) or Decimal(category['price']) <= 0):
-            fail('Bütün satış yerlərinə qiymət təyin et.')
+            unpriced.add(category['id'])
     ids, labels, block_ids = set(), set(), set()
     total = blocked = 0
     for block in blocks:
@@ -107,6 +108,8 @@ def validate_layout(data):
                 fail('Yer kateqoriyası düzgün deyil.')
             if not seat['blocked'] and seat.get('categoryId') not in category_ids:
                 fail('Bütün satış yerlərinə kateqoriya təyin et.')
+            if not seat['blocked'] and seat.get('categoryId') in unpriced:
+                fail('Bütün satış yerlərinə qiymət təyin et.')
             total += 1
             blocked += int(seat['blocked'])
     if total > 5000 or total == blocked:
@@ -191,6 +194,7 @@ class SeatPlanDetailAPIView(APIView):
         if not SeatingLayoutTemplate.objects.filter(pk=pk, owner=request.user).exists() and SeatingLayoutTemplate.objects.filter(owner=request.user).count() >= 100:
             fail('Maksimum 100 saxlanmış plan yarada bilərsən.')
         reusable = copy.deepcopy(layout)
+        reusable.pop('editorDraft', None)
         for category in reusable['categories']:
             category['price'] = ''
             category['free'] = False
