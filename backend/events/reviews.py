@@ -4,11 +4,12 @@ from rest_framework import serializers
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 from .models import EventSubmission, SubmissionReviewLog
 from .permissions import HasEventReviewPermission, can_review_events
 from .review_service import review_submission, review_version
-from .submissions import output, SubmissionThrottle
+from .submissions import output
 
 
 def review_output(item, *, detail=False, user):
@@ -67,9 +68,14 @@ class ReviewActionSerializer(serializers.Serializer):
         return attrs
 
 
+class ReviewThrottle(UserRateThrottle):
+    rate = '300/hour'
+    scope = 'event_review'
+
+
 class ReviewDetailAPIView(APIView):
     permission_classes = [IsAuthenticated, HasEventReviewPermission]
-    throttle_classes = [SubmissionThrottle]
+    throttle_classes = [ReviewThrottle]
 
     def get(self, request, pk):
         item = get_object_or_404(EventSubmission.objects.select_related('owner', 'event'), pk=pk)
