@@ -545,3 +545,20 @@ class EventSubmission(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+
+
+class SubmissionReviewLog(models.Model):
+    class Action(models.TextChoices):
+        COMMENT = 'comment', 'Daxili şərh'
+        CHANGES_REQUESTED = 'changes_requested', 'Düzəliş tələb edildi'
+        APPROVED = 'approved', 'Təsdiqləndi və yayımlandı'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    submission = models.ForeignKey(EventSubmission, on_delete=models.CASCADE, related_name='review_logs')
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='submission_review_logs')
+    action = models.CharField(max_length=24, choices=Action.choices)
+    body = models.TextField(blank=True, max_length=2000)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']

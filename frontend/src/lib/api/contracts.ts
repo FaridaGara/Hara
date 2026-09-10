@@ -97,6 +97,8 @@ export type UserProfile = {
   avatar_url: string;
   birth_date: string | null;
   interests: string[];
+  can_review_events?: boolean;
+  can_moderate_events?: boolean;
   account_type: "user" | "organizer" | "admin";
   role: UserRole;
   providers: SocialProvider[];

@@ -47,3 +47,22 @@ class HasAdminModelPermission(BasePermission):
             return False
 
         return user.has_perm(f"events.{action}_{resource}")
+
+
+def can_review_events(user, *, change=False):
+    if not user or not user.is_authenticated or not user.is_active:
+        return False
+    if user.is_superuser:
+        return True
+    if user.account_type != 'admin':
+        return False
+    return user.has_perm('events.change_eventsubmission') or (
+        not change and user.has_perm('events.view_eventsubmission')
+    )
+
+
+class HasEventReviewPermission(BasePermission):
+    message = 'Tədbirlərin yoxlanılması üçün komanda icazəsi lazımdır.'
+
+    def has_permission(self, request, view):
+        return can_review_events(request.user, change=request.method not in ('GET', 'HEAD', 'OPTIONS'))

@@ -30,6 +30,8 @@ def validate_new_password(password, *, user=None):
 class UserProfileSerializer(serializers.ModelSerializer):
     providers = serializers.SerializerMethodField()
     role = serializers.CharField(read_only=True)
+    can_review_events = serializers.SerializerMethodField()
+    can_moderate_events = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -47,6 +49,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "role",
             "providers",
             "is_email_verified",
+            "can_review_events",
+            "can_moderate_events",
         )
         read_only_fields = (
             "id",
@@ -55,7 +59,19 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "role",
             "providers",
             "is_email_verified",
+            "can_review_events",
+            "can_moderate_events",
         )
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_can_review_events(self, obj):
+        from events.permissions import can_review_events
+        return can_review_events(obj)
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_can_moderate_events(self, obj):
+        from events.permissions import can_review_events
+        return can_review_events(obj, change=True)
 
     @extend_schema_field(serializers.ListField(child=serializers.CharField()))
     def get_providers(self, obj):
