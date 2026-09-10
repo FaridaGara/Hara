@@ -25,6 +25,7 @@ from ticketing.inventory import annotate_inventory
 from ticketing.models import TicketType
 
 from .models import (
+    Category,
     Event,
     Favorite,
     EventPhoto,
@@ -48,6 +49,23 @@ from .serializers import (
     VenuePlanSerializer,
     VenueChoiceSerializer,
 )
+
+
+class CategoryChoiceListAPIView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        from .categories import LEGACY_SLUGS
+        categories = list(Category.objects.all())
+        slugs = {category.slug for category in categories}
+        active_slugs = {category.slug for category in categories if category.is_active}
+        legacy_targets = {legacy: next((alias for alias in aliases if alias in active_slugs), None)
+                          for legacy, aliases in LEGACY_SLUGS.items() if legacy not in slugs}
+        return Response([{
+            'id': category.pk, 'name': category.name, 'slug': category.slug,
+            'legacy_slugs': [legacy for legacy, target in legacy_targets.items() if target == category.slug],
+        } for category in categories if category.is_active])
 
 
 class VenueChoiceListAPIView(ListAPIView):

@@ -49,6 +49,12 @@ describe("More view", () => {
     expect(container.innerHTML).not.toContain("battery");
   });
 
+  it("Tədbirlərim bölməsinə giriş verir", async () => {
+    renderView();
+    await userEvent.click(screen.getByRole("button", { name: "Tədbirlərim" }));
+    expect(push).toHaveBeenCalledWith("/my-events");
+  });
+
   it("geri düyməsini və çıxışı işlək saxlayır", async () => {
     renderView();
 

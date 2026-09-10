@@ -1,3 +1,4 @@
+import { eventsApi } from "@/lib/api/events";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -36,6 +37,7 @@ const profile = {
 const session = { access: "test-access", refresh: "test-refresh", user: profile };
 
 beforeEach(() => {
+  vi.spyOn(eventsApi, "categories").mockResolvedValue([{ id: 1, name: "Musiqi", slug: "musiqi" }]);
   navigation.pathname = "/create-event";
   navigation.searchParams = new URLSearchParams();
   window.localStorage.clear();

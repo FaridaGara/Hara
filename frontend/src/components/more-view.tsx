@@ -17,6 +17,7 @@ type MenuItem = {
 };
 
 const ACCOUNT_ITEMS: MenuItem[] = [
+  { label: "Tədbirlərim", icon: "/figma/create-event/review-calendar.svg", href: "/my-events" },
   { label: "Şəxsi məlumatlar", icon: "/figma/more/user.svg", href: "/personal-info" },
 ];
 

@@ -39,6 +39,8 @@ describe("step five review", () => {
     const submit = vi.spyOn(eventSubmissionsApi, "submit").mockImplementation(async id => pending(id));
     render(<Harness />); await confirm();
     expect(await screen.findByRole("heading", { name: "Tədbirin yoxlanılır" })).toBeTruthy();
+    expect(screen.getByText(/uğurla HARA komandasına göndərildi/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Tədbirlərim" }).getAttribute("href")).toBe("/my-events");
     expect(submit).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ sales: draft.sales }));
   });
   it("previews the selected image and settings and returns without losing them", async () => {
@@ -87,6 +89,13 @@ describe("step five review", () => {
     vi.mocked(eventSubmissionsApi.get).mockResolvedValue(pending(id)); render(<Harness />);
     expect(await screen.findByRole("heading", { name: "Tədbirin yoxlanılır" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Yoxlamaya göndər" })).toBeNull();
+  });
+  it("routes a rejected category back to details without claiming submission succeeded", async () => {
+    vi.spyOn(eventSubmissionsApi, "submit").mockRejectedValue(new ApiError({ kind: "http", status: 400, message: "Kateqoriyanı yenidən seç.", payload: { code: "CATEGORY_UNAVAILABLE" } }));
+    render(<Harness />); await confirm();
+    await userEvent.click(await screen.findByRole("button", { name: "Kateqoriyanı yenidən seç" }));
+    expect(onEdit).toHaveBeenCalledWith(1);
+    expect(screen.queryByRole("heading", { name: "Tədbirin yoxlanılır" })).toBeNull();
   });
   it("blocks unqualified accounts without claiming verification", async () => {
     vi.mocked(eventSubmissionsApi.eligibility).mockResolvedValue({ eligible: false, detail: "Təşkilatçı hesabı tələb olunur." });

@@ -1,5 +1,6 @@
 import { apiRequest } from "./client";
 import type {
+  EventCategory,
   EventListFilters,
   HaraEvent,
   HaraEventDetail,
@@ -22,6 +23,9 @@ function eventListQuery(filters: EventListFilters) {
 }
 
 export const eventsApi = {
+  categories(signal?: AbortSignal) {
+    return apiRequest<(EventCategory & { legacy_slugs?: string[] })[]>("/api/categories/", { auth: "none", signal });
+  },
   list(filters: EventListFilters = {}, signal?: AbortSignal) {
     return apiRequest<HaraEvent[]>(`/api/events/${eventListQuery(filters)}`, {
       auth: "none",
