@@ -34,11 +34,20 @@ class SubmissionThrottle(UserRateThrottle):
     scope = 'event_submission'
 
 
-def eligibility(user):
+def is_free_event(snapshot):
+    """Fail closed for malformed or mixed-price drafts; the full validator still runs."""
+    sales = snapshot.get('sales') if isinstance(snapshot, dict) else None
+    tickets = sales.get('tickets') if isinstance(sales, dict) else None
+    return isinstance(tickets, list) and bool(tickets) and all(
+        isinstance(ticket, dict) and ticket.get('paymentType') == 'free' for ticket in tickets
+    )
+
+
+def eligibility(user, *, free_event=False):
     if not user.is_active or not user.is_email_verified:
         return {'eligible': False, 'detail': 'Əvvəlcə e-poçt ünvanını təsdiqlə.'}
-    if not user.is_superuser and user.account_type != 'organizer':
-        return {'eligible': False, 'detail': 'Göndərmək üçün HARA tərəfindən verilmiş təşkilatçı hesabı lazımdır. Qaralamanı saxlaya bilərsən.'}
+    if not free_event and not user.is_superuser and user.account_type != 'organizer':
+        return {'eligible': False, 'detail': 'Ödənişli tədbir göndərmək üçün HARA tərəfindən verilmiş təşkilatçı hesabı lazımdır. Qaralamanı saxlaya bilərsən.'}
     if not (user.display_name or user.get_full_name()).strip() or not user.phone_number.strip():
         return {'eligible': False, 'detail': 'Profilində ad və əlaqə nömrəsini tamamla.'}
     return {'eligible': True, 'detail': 'Tədbiri yoxlamaya göndərə bilərsən.'}
@@ -213,7 +222,7 @@ def output(item, detail=False):
 
 class SubmissionEligibilityAPIView(APIView):
     permission_classes = [IsAuthenticated]
-    def get(self, request): return Response(eligibility(request.user))
+    def get(self, request): return Response(eligibility(request.user, free_event=request.query_params.get('payment_type') == 'free'))
 
 
 class SubmissionListAPIView(APIView):
@@ -238,7 +247,7 @@ class SubmissionDetailAPIView(APIView):
         fingerprint = hashlib.sha256(json.dumps(raw, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
         if item and item.fingerprint == fingerprint: return Response(output(item, True))
         if item and (item.status != 'changes_requested' or item.event.status != 'draft' or item.event.tickets.exists()): return Response({'detail': 'Əvvəlki sorğu artıq göndərilib. Statusu yoxla.'}, status=409)
-        gate = eligibility(owner)
+        gate = eligibility(owner, free_event=is_free_event(raw))
         if not gate['eligible']: return Response({'detail': gate['detail']}, status=403)
         if not item and EventSubmission.objects.filter(owner=owner).count() >= 100: invalid('Maksimum 100 tədbir göndərə bilərsən.')
         created = item is None

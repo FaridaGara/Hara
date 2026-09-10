@@ -64,6 +64,60 @@ class SubmissionTests(APITestCase):
         self.other.refresh_from_db(); self.assertEqual(self.other.account_type, 'user')
         self.assertEqual(Event.objects.count(), 0)
 
+    def use_default_account(self):
+        self.owner.account_type = 'user'
+        self.owner.save()
+
+    def make_free(self):
+        self.data['sales']['tickets'][0].update(paymentType='free', price='')
+        self.data['sales']['refundPolicy'] = ''
+
+    def test_default_account_can_submit_free_event_and_staff_can_publish(self):
+        self.use_default_account(); self.make_free()
+        self.assertTrue(self.client.get('/api/event-submissions/eligibility/?payment_type=free').data['eligible'])
+        response = self.send(); self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data['status'], 'pending')
+        self.assertEqual(self.send().status_code, 200)
+        event = Event.objects.get(); self.assertEqual(event.ticket_types.get().price, 0)
+        self.assertEqual(self.client.patch(f'/api/organizer/events/{event.slug}/', {'status': 'published'}, format='json').status_code, 403)
+        reviewer = EventSubmissionAdmin(EventSubmission, admin.site)
+        request = RequestFactory().post('/admin/'); request.user = self.owner
+        with patch.object(reviewer, 'message_user'), patch.object(reviewer, 'log_change'):
+            reviewer.approve_and_publish(request, EventSubmission.objects.all())
+        event.refresh_from_db(); self.assertEqual(event.status, 'published')
+        self.owner.refresh_from_db(); self.assertEqual(self.owner.account_type, 'user')
+
+    def test_default_account_cannot_submit_paid_or_mixed_event_with_free_hint(self):
+        self.use_default_account()
+        self.assertFalse(self.client.get('/api/event-submissions/eligibility/').data['eligible'])
+        self.url += '?payment_type=free'
+        self.assertEqual(self.send().status_code, 403)
+        self.data['sales']['tickets'].append({**self.data['sales']['tickets'][0], 'id': 'free', 'paymentType': 'free', 'price': ''})
+        self.assertEqual(self.send().status_code, 403)
+        self.assertEqual(Event.objects.count(), 0)
+
+    def test_free_event_still_requires_verified_complete_profile(self):
+        self.use_default_account(); self.make_free()
+        for field, value in [('phone_number', ''), ('is_email_verified', False)]:
+            original = getattr(self.owner, field); setattr(self.owner, field, value); self.owner.save()
+            self.assertFalse(self.client.get('/api/event-submissions/eligibility/?payment_type=free').data['eligible'])
+            self.assertEqual(self.send().status_code, 403)
+            setattr(self.owner, field, original); self.owner.save()
+
+    def test_default_account_cannot_change_free_submission_to_paid(self):
+        self.use_default_account(); self.make_free(); self.assertEqual(self.send().status_code, 201)
+        item = EventSubmission.objects.get(); item.status = 'changes_requested'; item.save()
+        self.data['sales']['tickets'][0].update(paymentType='paid', price='25')
+        self.assertEqual(self.send().status_code, 403)
+        self.make_free(); self.data['title'] = 'Updated free event'
+        self.assertEqual(self.send().status_code, 200)
+        event = Event.objects.get(); event.ticket_types.update(price=25)
+        reviewer = EventSubmissionAdmin(EventSubmission, admin.site)
+        request = RequestFactory().post('/admin/'); request.user = self.owner
+        with patch.object(reviewer, 'message_user'), patch.object(reviewer, 'log_change'):
+            reviewer.approve_and_publish(request, EventSubmission.objects.all())
+        event.refresh_from_db(); self.assertEqual(event.status, 'draft')
+
     def test_incomplete_profile_and_unverified_email_are_blocked(self):
         for field, value in [('phone_number', ''), ('is_email_verified', False)]:
             original = getattr(self.owner, field); setattr(self.owner, field, value); self.owner.save()

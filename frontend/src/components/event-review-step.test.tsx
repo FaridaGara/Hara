@@ -24,11 +24,23 @@ beforeEach(() => {
   vi.spyOn(eventSubmissionsApi, "get").mockRejectedValue(new ApiError({ kind: "http", status: 404, message: "Tapılmadı" }));
 });
 async function confirm() {
-  await screen.findByText("Təşkilatçı hesabı hazırdır");
+  await screen.findByText("Hesab göndərməyə hazırdır");
   await userEvent.click(screen.getByRole("button", { name: "Yoxlamaya göndər" }));
   await userEvent.click(screen.getByRole("button", { name: "Təsdiqlə və göndər" }));
 }
 describe("step five review", () => {
+  it("submits a free event with default sales settings and no price or refund policy", async () => {
+    const draft = validDraft();
+    draft.sales.tickets[0].paymentType = "free";
+    draft.sales.tickets[0].price = "";
+    draft.sales.refundPolicy = "";
+    saveEventDraft(7, draft);
+    vi.mocked(eventSubmissionsApi.eligibility).mockImplementation(async (_signal, freeEvent) => ({ eligible: Boolean(freeEvent), detail: "Hazırdır" }));
+    const submit = vi.spyOn(eventSubmissionsApi, "submit").mockImplementation(async id => pending(id));
+    render(<Harness />); await confirm();
+    expect(await screen.findByRole("heading", { name: "Tədbirin yoxlanılır" })).toBeTruthy();
+    expect(submit).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ sales: draft.sales }));
+  });
   it("previews the selected image and settings and returns without losing them", async () => {
     render(<Harness />);
     await userEvent.click(screen.getByRole("button", { name: "İştirakçı kimi önbaxış" }));
@@ -40,14 +52,14 @@ describe("step five review", () => {
   });
   it("routes a missing cover to media and blocks submission", async () => {
     saveEventDraft(7, { ...validDraft(), media: { cover: "", gallery: [] } }); render(<Harness />);
-    await screen.findByText("Təşkilatçı hesabı hazırdır");
+    await screen.findByText("Hesab göndərməyə hazırdır");
     expect((screen.getByRole("button", { name: "Yoxlamaya göndər" }) as HTMLButtonElement).disabled).toBe(true);
     await userEvent.click(screen.getByRole("button", { name: "Düzəliş et" })); expect(onEdit).toHaveBeenCalledWith(4);
   });
   it("persists request identity before sending and ignores repeated confirmation", async () => {
     let resolve!: (value: EventSubmission) => void;
     const submit = vi.spyOn(eventSubmissionsApi, "submit").mockImplementation((id) => { expect(readEventDraft(7).submissionId).toBe(id); return new Promise(r => { resolve = r; }); });
-    render(<Harness />); await screen.findByText("Təşkilatçı hesabı hazırdır");
+    render(<Harness />); await screen.findByText("Hesab göndərməyə hazırdır");
     await userEvent.click(screen.getByRole("button", { name: "Yoxlamaya göndər" }));
     const button = screen.getByRole("button", { name: "Təsdiqlə və göndər" }); fireEvent.click(button); fireEvent.click(button);
     expect(submit).toHaveBeenCalledTimes(1);
@@ -64,7 +76,7 @@ describe("step five review", () => {
   });
   it("does not send if durable request storage fails", async () => {
     const submit = vi.spyOn(eventSubmissionsApi, "submit"); render(<Harness />);
-    await screen.findByText("Təşkilatçı hesabı hazırdır");
+    await screen.findByText("Hesab göndərməyə hazırdır");
     await userEvent.click(screen.getByRole("button", { name: "Yoxlamaya göndər" }));
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("quota"); });
     await userEvent.click(screen.getByRole("button", { name: "Təsdiqlə və göndər" }));

@@ -58,13 +58,13 @@ describe("event creation authentication entry", () => {
     vi.spyOn(eventSubmissionsApi, "eligibility").mockResolvedValue({ eligible: true, detail: "Hazırdır" });
     saveEventDraft(profile.id, { ...structuredClone(EMPTY_EVENT_DRAFT), title: "Caz", category: "musiqi", description: "Canlı musiqi", lastStep: 5 });
     render(<AuthProvider><ProtectedRoute><EventWizard /></ProtectedRoute></AuthProvider>);
-    await screen.findByText("Təşkilatçı hesabı hazırdır");
+    await screen.findByText("Hesab göndərməyə hazırdır");
     await userEvent.click(screen.getByRole("button", { name: /Əsas məlumatlar: Caz/ }));
     fill("Tədbirin adı", "Ləğv ediləcək ad");
     fireEvent.blur(screen.getByLabelText("Tədbirin adı"));
     expect(readEventDraft(profile.id).title).toBe("Caz");
     await userEvent.click(screen.getByRole("button", { name: "Əvvəlki mərhələyə qayıt" }));
-    await screen.findByText("Təşkilatçı hesabı hazırdır");
+    await screen.findByText("Hesab göndərməyə hazırdır");
     await userEvent.click(screen.getByRole("button", { name: /Əsas məlumatlar: Caz/ }));
     expect((screen.getByLabelText("Tədbirin adı") as HTMLInputElement).value).toBe("Caz");
     fill("Tədbirin adı", "Yeni caz gecəsi");
