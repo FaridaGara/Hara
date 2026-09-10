@@ -3,6 +3,7 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from events.models import Event, VenueSection
+from events.media import cover_thumbnail
 
 from .inventory import get_inventory_snapshot
 from .models import Order, OrderItem, Payment, Ticket, TicketType
@@ -462,6 +463,9 @@ class TicketFilterSerializer(serializers.Serializer):
 
 
 class TicketReadSerializer(serializers.ModelSerializer):
+    event_cover_thumbnail = serializers.SerializerMethodField()
+    refund_status = serializers.SerializerMethodField()
+    cancellation_reason = serializers.CharField(source="event.cancellation.reason", read_only=True, default="")
     currency = serializers.CharField(
         source="order_item.order.currency",
         read_only=True,
@@ -518,6 +522,9 @@ class TicketReadSerializer(serializers.ModelSerializer):
             "id",
             "qr_code",
             "status",
+            "refund_status",
+            "event_cover_thumbnail",
+            "cancellation_reason",
             "event_slug",
             "event_title",
             "event_start_at",
@@ -533,6 +540,26 @@ class TicketReadSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = fields
+
+    @staticmethod
+    def get_event_cover_thumbnail(ticket) -> str:
+        # Published photos already have a public URL. Cancelled photos stay private.
+        if ticket.event.status == Event.Status.PUBLISHED:
+            return ''
+        submission = getattr(ticket.event, 'submission', None)
+        return cover_thumbnail((submission.snapshot.get('media') or {}).get('cover', ''), 676, 360) if submission else ''
+
+    @staticmethod
+    @extend_schema_field(serializers.ChoiceField(choices=['pending', 'refunded'], allow_null=True))
+    def get_refund_status(ticket):
+        if ticket.status == Ticket.Status.REFUNDED:
+            return 'refunded'
+        if ticket.status != Ticket.Status.CANCELLED or ticket.order_item.unit_price <= 0 or ticket.order_item.order.status != Order.Status.PAID:
+            return None
+        pending = getattr(ticket, 'has_refund_request', None)
+        if pending is None:
+            pending = ticket.order_item.order.refund_requests.filter(event_id=ticket.event_id).exists()
+        return 'pending' if pending else None
 
     @staticmethod
     def get_owner_display_name(ticket) -> str:

@@ -223,10 +223,13 @@ export type Ticket = {
   event_end_at: string;
   event_location_name: string;
   event_cover_image_url?: string;
+  event_cover_thumbnail?: string;
   ticket_type_name: string;
   unit_price: string;
   currency: string;
   status: "valid" | "used" | "cancelled" | "refunded";
+  refund_status?: "pending" | "refunded" | null;
+  cancellation_reason?: string;
   owner_display_name: string;
   is_checked_in: boolean;
   checked_in_at: string | null;

@@ -8,7 +8,8 @@ import { submissionDraft } from "@/lib/event-review";
 import { submissionStatuses, submissionTime } from "@/lib/submission-status";
 import { useAuth } from "./auth-provider";
 import { AuthMessage } from "./auth-ui";
-import styles from "./event-wizard.module.css";
+import { LifecyclePage, LifecycleIntro, LifecycleState, LifecycleLoading, SubmissionCard } from "./lifecycle-ui";
+import styles from "./lifecycle-ui.module.css";
 
 function AccountEventSubmissions() {
   const { user } = useAuth();
@@ -18,6 +19,7 @@ function AccountEventSubmissions() {
   const [loading, setLoading] = useState(true);
   const [opening, setOpening] = useState(false);
   const [checkedAt, setCheckedAt] = useState("");
+  const [filter, setFilter] = useState<"all" | EventSubmission["status"]>("all");
   const request = useRef<AbortController | null>(null);
   const refresh = useCallback(() => {
     request.current?.abort();
@@ -57,29 +59,28 @@ function AccountEventSubmissions() {
     if (!saveEventDraft(user.id, structuredClone(EMPTY_EVENT_DRAFT))) { setError("Yeni qaralama saxlanılmadı. Yenidən cəhd et."); return; }
     router.push("/create-event?step=1");
   }
-  return <main className={`hara-auth ${styles.page}`}><section className={styles.shell}><div className={styles.content}>
-    <Link className={styles.retry} href="/more">Profilə qayıt</Link>
-    <div className={styles.introduction}><h1>Tədbirlərim</h1><p>Göndərdiyin tədbirləri və moderatorun cavabını burada izləyə bilərsən.</p></div>
-    <button className={styles.addTicket} disabled={loading} onClick={() => { setLoading(true); void refresh(); }}>{loading ? "Statuslar yoxlanılır…" : "Statusları yenilə"}</button>
-    {checkedAt ? <p className={styles.hint}>Son yoxlama: {submissionTime(checkedAt)} · Bakı vaxtı. Səhifə açıq olduqda statuslar hər dəqiqə yenilənir.</p> : null}
+  const visible = items.filter(item => filter === "all" || item.status === filter);
+  const filters = ["all", "pending", "published", ...(["changes_requested", "cancelled", "completed"] as const).filter(status => filter === status || items.some(item => item.status === status))] as const;
+  return <LifecyclePage title="Tədbirlərim" backHref="/more" footer={<button className={styles.primary} disabled={opening} onClick={create}>Yeni tədbir yarat</button>}>
+    {items.length || loading || error ? <LifecycleIntro title="Tədbirlərini izləyin">Göndərdiyiniz tədbirlərin statusu və komandanın rəyi burada görünür.</LifecycleIntro> : null}
+    {items.length ? <nav className={styles.tabs} aria-label="Tədbir statusu">{filters.map(status => <button key={status} aria-pressed={filter === status} onClick={() => setFilter(status)}>{status === "all" ? "Hamısı" : status === "pending" ? "Yoxlamada" : submissionStatuses[status].label} · {status === "all" ? items.length : items.filter(item => item.status === status).length}</button>)}</nav> : null}
+    {loading && !items.length ? <LifecycleLoading label="Tədbirlər yüklənir…" /> : null}
     {error ? <AuthMessage>{error}</AuthMessage> : null}
-    {!items.length && !loading && !error ? <div className={styles.reviewNotice}><strong>Hələ tədbir göndərilməyib</strong><p>Qaralama saxlamaq tədbiri yoxlamaya göndərmir. 5-ci addımda “Təsdiqlə və göndər” düyməsini seç. Uğurlu göndərilmədən sonra tədbirin burada görünəcək.</p></div> : null}
-    <div className={styles.submissionList} aria-live="polite" aria-busy={loading}>
-      {items.map(item => <article key={item.id} className={styles.submissionCard} aria-label={item.title}>
-        <div className={styles.submissionHeading}><h2>{item.title}</h2><span className={styles.submissionBadge} data-status={item.status}>{submissionStatuses[item.status].label}</span></div>
-        <p>{submissionStatuses[item.status].description}</p>
-        <dl className={styles.reviewDetails}>
+    {!items.length && !loading && !error ? <LifecycleState title="İlk tədbirinizi göndərin" action={<Link className={styles.secondary} href="/create-event">Qaralamaya qayıt</Link>}>Qaralama saxlamaq tədbiri yoxlamaya göndərmir. 5-ci addımda “Təsdiqlə və göndər” düyməsini seçin. Göndərildikdən sonra tədbiriniz burada görünəcək.</LifecycleState> : null}
+    <div className={styles.stack} aria-live="polite" aria-busy={loading}>
+      {visible.map(item => <SubmissionCard key={item.id} item={item} action={item.status === "changes_requested" ? <button className={styles.secondary} disabled={opening} onClick={() => void edit(item)}>Düzəliş et və yenidən göndər</button> : item.status === "published" && item.event_slug ? <Link className={styles.secondary} href={`/events/${item.event_slug}`}>Tədbirə bax</Link> : null}>
+        <dl className={styles.receipt}>
           {item.submitted_at ? <div><dt>Göndərildi · Bakı vaxtı</dt><dd><time dateTime={item.submitted_at}>{submissionTime(item.submitted_at)}</time></dd></div> : null}
-          {item.updated_at ? <div><dt>Son dəyişiklik · Bakı vaxtı</dt><dd><time dateTime={item.updated_at}>{submissionTime(item.updated_at)}</time></dd></div> : null}
+          {item.updated_at && item.updated_at !== item.submitted_at ? <div><dt>Son dəyişiklik</dt><dd><time dateTime={item.updated_at}>{submissionTime(item.updated_at)}</time></dd></div> : null}
         </dl>
-        {item.note ? <div className={styles.reviewNotice}><strong>Moderatorun qeydi</strong><p className={styles.reviewDescription}>{item.note}</p></div> : null}
-        {item.status === "changes_requested" ? <button className={styles.addTicket} disabled={opening} onClick={() => void edit(item)}>Düzəliş et və yenidən göndər</button> : null}
-        {item.status === "published" ? <Link className={styles.addTicket} href={`/events/${item.event_slug}`}>Tədbirə bax</Link> : null}
-      </article>)}
+        <p className={styles.meta}>{submissionStatuses[item.status].description}</p>
+        {item.note ? <div className={styles.note}><strong>{item.status === "cancelled" ? "Dayandırılma səbəbi" : "Moderatorun qeydi"}</strong><p>{item.note}</p></div> : null}
+      </SubmissionCard>)}
+      {items.length > 0 && !visible.length ? <p className={styles.meta}>Bu statusda tədbir yoxdur.</p> : null}
     </div>
-    <Link className={styles.addTicket} href="/create-event">Qaralamaya qayıt</Link>
-    <button className={styles.next} disabled={opening} onClick={create}>Yeni tədbir yarat</button>
-  </div></section></main>;
+    <div className={styles.refresh}>{checkedAt ? <span>Son yenilənmə: {submissionTime(checkedAt)}</span> : null}<button className={styles.textButton} aria-label="Statusları yenilə" disabled={loading} onClick={() => { setLoading(true); void refresh(); }}>{loading ? "Yenilənir…" : "Yenilə"}</button></div>
+    {items.length ? <Link className={styles.textButton} href="/create-event">Qaralamaya qayıt</Link> : null}
+  </LifecyclePage>;
 }
 
 export function MyEventSubmissions() {

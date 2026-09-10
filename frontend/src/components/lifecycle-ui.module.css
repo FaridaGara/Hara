@@ -1,0 +1,75 @@
+.page { --lifecycle-soft: color-mix(in srgb, var(--hara-tab-active) 12%, transparent); max-width: 402px; margin: auto; min-height: 100dvh; display: flex; flex-direction: column; background: var(--hara-auth-page); color: var(--hara-auth-text); font-size: 15px; line-height: 20px; letter-spacing: -.23px; }
+.wide { max-width: 1180px; }
+.header { position: relative; display: flex; align-items: center; flex: none; min-height: calc(88px + var(--hara-safe-top)); padding: calc(32px + var(--hara-safe-top)) 16px 16px; }
+.header > p { position: absolute; left: 64px; right: 64px; text-align: center; font-size: 16px; line-height: 21px; font-weight: 600; letter-spacing: -.31px; }
+.back { display: grid; place-items: center; width: 40px; height: 40px; flex: none; border-radius: 50%; background: var(--hara-auth-field); }
+.content { display: flex; flex-direction: column; gap: 16px; padding: 16px; flex: 1; min-width: 0; }
+.intro { display: flex; flex-direction: column; gap: 16px; }
+.intro h1, .state h1 { font-size: 24px; line-height: 32px; font-weight: 700; letter-spacing: -.45px; overflow-wrap: anywhere; }
+.intro p, .muted { color: var(--hara-auth-secondary); }
+.footer { position: sticky; bottom: 0; z-index: 10; flex: none; display: flex; flex-direction: column; gap: 8px; padding: 16px 16px calc(16px + var(--hara-safe-bottom)); background: var(--hara-auth-page); }
+.primary, .secondary, .inverse { display: flex; align-items: center; justify-content: center; min-height: 48px; padding: 12px 16px; width: 100%; border: 0; border-radius: 16px; font-size: 16px; line-height: 21px; letter-spacing: -.31px; font-weight: 600; text-align: center; cursor: pointer; }
+.primary { background: var(--hara-tab-active); color: var(--hara-weekly-price-text); }
+.secondary { background: color-mix(in srgb, var(--hara-tab-active) 12%, transparent); color: var(--hara-tab-active); }
+.inverse { background: var(--hara-auth-text); color: var(--hara-auth-page); }
+.textButton { color: var(--hara-auth-secondary); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; min-height: 44px; }
+.page button:disabled, .dialog button:disabled { cursor: not-allowed; opacity: .45; }
+.page :is(a, button, input, select, textarea):focus-visible, .dialog :is(a, button, input, textarea):focus-visible { outline: 2px solid var(--hara-tab-active); outline-offset: 3px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+.tabs button { padding: 10px 12px; min-height: 40px; border-radius: 12px; background: var(--hara-auth-field); color: var(--hara-auth-secondary); font-size: 13px; line-height: 18px; font-weight: 600; cursor: pointer; }
+.tabs button[aria-pressed="true"] { background: var(--lifecycle-soft); color: var(--hara-tab-active); }
+.stack, .eventCard, .notice { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.stack { gap: 16px; }
+.eventCard, .notice { padding: 16px; background: var(--hara-auth-field); border-radius: 16px; overflow-wrap: anywhere; }
+.eventHeading { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+.eventHeading > div { min-width: 0; }
+.eventHeading h2, .notice h2 { font-size: 16px; line-height: 21px; font-weight: 600; letter-spacing: -.31px; }
+.eventHeading h2 { margin-bottom: 4px; }
+.eventHeading p, .meta { font-size: 13px; line-height: 18px; letter-spacing: -.08px; color: var(--hara-auth-secondary); }
+.thumbnail { width: 72px; height: 88px; object-fit: cover; border-radius: 12px; flex: none; }
+.status { font-size: 13px; line-height: 18px; letter-spacing: -.08px; font-weight: 600; color: var(--hara-tab-active); }
+.status[data-status="published"], .status[data-status="completed"] { color: var(--hara-auth-text); }
+.eventCard .note { border-top: 1px solid color-mix(in srgb, var(--hara-auth-secondary) 16%, transparent); padding-top: 12px; }
+.note { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 18px; color: var(--hara-auth-secondary); }
+.note strong { display: block; color: var(--hara-auth-text); margin-bottom: 4px; }
+.receipt { display: flex; flex-direction: column; gap: 4px; font-size: 13px; line-height: 18px; color: var(--hara-auth-secondary); }
+.receipt > div { display: flex; flex-wrap: wrap; gap: 4px; }
+.refresh { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; line-height: 18px; color: var(--hara-auth-secondary); }
+.noticeHeading { display: flex; gap: 12px; align-items: center; }
+.notice > p { color: var(--hara-auth-secondary); white-space: pre-wrap; }
+.accentNotice { background: color-mix(in srgb, var(--hara-tab-active) 12%, transparent); }
+.bell { display: inline-block; flex: none; width: 24px; height: 24px; background: currentColor; mask: url('/figma/home/notification.svg') center / contain no-repeat; }
+.state { display: flex; flex-direction: column; gap: 16px; align-items: center; text-align: center; margin: auto 0; padding: 40px 8px; }
+.state > p { color: var(--hara-auth-secondary); }
+.stateIcon { width: 96px; height: 96px; border-radius: 24px; display: grid; place-items: center; background: color-mix(in srgb, var(--hara-tab-active) 12%, transparent); color: var(--hara-tab-active); margin-bottom: 8px; }
+.stateIcon .bell { width: 40px; height: 40px; }
+.loading { display: flex; flex-direction: column; gap: 16px; font-size: 13px; color: var(--hara-auth-secondary); }
+.skeletonCard { display: flex; flex-direction: column; gap: 16px; background: var(--hara-auth-field); padding: 16px; border-radius: 16px; }
+.skeletonCard div { width: 70%; height: 16px; border-radius: 6px; background: color-mix(in srgb, var(--hara-auth-muted) 15%, transparent); animation: pulse 1.5s ease-in-out infinite; }
+.skeletonCard div:nth-child(2) { width: 100%; height: 88px; }
+.skeletonCard div:last-child { width: 45%; }
+@keyframes pulse { 50% { opacity: .4; } }
+@media (prefers-reduced-motion: reduce) { .skeletonCard div { animation: none; } }
+.pagination { display: flex; gap: 8px; }
+.dialog { margin: auto; width: min(370px, calc(100% - 32px)); max-height: calc(100dvh - 32px); padding: 0; border: 0; border-radius: 24px; color: var(--hara-auth-text); background: var(--hara-auth-page); font-size: 15px; line-height: 20px; overflow: auto; }
+.dialog::backdrop { background: #0008; }
+.dialogContent { display: flex; flex-direction: column; gap: 16px; padding: 24px; }
+.dialogContent > h2 { font-size: 24px; line-height: 32px; font-weight: 700; outline: none; }
+.dialogContent > p { color: var(--hara-auth-secondary); }
+.dialogFooter { display: flex; flex-direction: column; gap: 8px; padding: 0 24px 24px; }
+.fullDialog { max-width: 402px; width: 100%; max-height: 100dvh; min-height: 100dvh; border-radius: 0; }
+.fullDialog[open] { display: flex; flex-direction: column; }
+.fullDialog .dialogContent { padding: calc(32px + var(--hara-safe-top)) 16px 16px; flex: 1; }
+.fullDialog .dialogFooter { padding: 16px 16px calc(16px + var(--hara-safe-bottom)); }
+.field { display: flex; flex-direction: column; gap: 16px; font-weight: 600; }
+.field textarea { border: 0; border-radius: 12px; background: var(--hara-auth-field); color: var(--hara-auth-text); padding: 16px; min-height: 120px; width: 100%; resize: vertical; font-size: 15px; line-height: 20px; font-weight: 400; }
+.ticket { display: flex; flex-direction: column; gap: 16px; padding: 16px; border-radius: 24px; background: var(--hara-auth-field); overflow-wrap: anywhere; }
+.ticket h1 { font-size: 24px; line-height: 32px; font-weight: 700; }
+.ticketCover { width: 100%; height: 112px; border-radius: 12px; object-fit: cover; }
+.ticketInfo { display: flex; flex-direction: column; gap: 8px; }
+.ticketLine { display: flex; justify-content: space-between; gap: 16px; border-top: 1px dashed var(--hara-auth-muted); padding-top: 16px; font-size: 16px; line-height: 21px; font-weight: 600; }
+.ticketCode { display: flex; flex-direction: column; gap: 8px; align-items: center; text-align: center; border-radius: 12px; background: var(--hara-auth-page); padding: 24px 16px; }
+.ticketCode h2 { font-weight: 600; }
+.ticketCode p { font-size: 13px; line-height: 18px; color: var(--hara-auth-secondary); }
+.ticketCode code { margin-top: 8px; font-size: 13px; line-height: 22px; overflow-wrap: anywhere; user-select: all; color: var(--hara-tab-active); }
+@media (min-width: 720px) { .wide .content { padding: 24px 32px 40px; } .wide .header { padding-inline: 32px; } .wide .footer { max-width: 402px; width: 100%; align-self: center; } .fullDialog { min-height: min(760px, 90dvh); max-height: 90dvh; border-radius: 24px; } }

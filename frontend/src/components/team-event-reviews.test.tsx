@@ -11,6 +11,7 @@ const detail = (): EventReviewDetail => ({
   id: "00000000-0000-4000-8000-000000000007", title: "Caz gecəsi", status: "pending", note: "", event_slug: "caz", sales_start_at: null,
   version: "a".repeat(64), can_moderate: true, submitted_at: "2026-09-10T08:00:00Z", creator: { id: 8, name: "Aysel", email: "aysel@example.com", phone: "+994501234567" }, history: [],
   snapshot: { ...structuredClone(EMPTY_EVENT_DRAFT), title: "Caz gecəsi", category: "music", categoryLabel: "Musiqi", description: "Canlı caz",
+    sales: { ...structuredClone(EMPTY_EVENT_DRAFT.sales), tickets: [{ id: "standard", name: "Standart", paymentType: "paid", price: "25", quantity: "50", includes: "", lastValidQuantity: "50" }] },
     media: { cover: "data:image/jpeg;base64,YQ==", gallery: [] } },
 });
 beforeEach(() => {
@@ -33,7 +34,7 @@ it("shows creator contacts, event media and persists internal comments only afte
   expect(screen.getByAltText("Caz gecəsi — üz qabığı")).toBeTruthy();
   let resolve!: (data: EventReviewDetail) => void;
   vi.mocked(eventReviewsApi.act).mockImplementation(() => new Promise(r => { resolve = r; }));
-  await userEvent.type(screen.getByRole("textbox", { name: "Şərh və ya düzəliş səbəbi" }), "Media yoxlanılıb");
+  await userEvent.type(screen.getByRole("textbox", { name: "Daxili şərh" }), "Media yoxlanılıb");
   const button = screen.getByRole("button", { name: "Daxili şərh əlavə et" });
   fireEvent.click(button); fireEvent.click(button);
   expect(eventReviewsApi.act).toHaveBeenCalledTimes(1);
@@ -55,9 +56,11 @@ it("requires inspection and decision confirmation before publishing", async () =
 });
 it("requires a correction note and exposes a read-only mode", async () => {
   const view = render(<TeamReviewDetail id={detail().id} />); await screen.findByText("Aysel");
-  expect((screen.getByRole("button", { name: "Düzəliş tələb et" }) as HTMLButtonElement).disabled).toBe(true);
-  await userEvent.type(screen.getByRole("textbox", { name: "Şərh və ya düzəliş səbəbi" }), "Ünvanı tamamla");
+  await userEvent.type(screen.getByRole("textbox", { name: "Daxili şərh" }), "Bu daxili qeyd təşkilatçıya getməsin");
   await userEvent.click(screen.getByRole("button", { name: "Düzəliş tələb et" }));
+  expect((screen.getByRole("textbox", { name: "Düzəliş səbəbi" }) as HTMLTextAreaElement).value).toBe("");
+  expect((screen.getByRole("button", { name: "Qərarı təsdiqlə" }) as HTMLButtonElement).disabled).toBe(true);
+  await userEvent.type(screen.getByRole("textbox", { name: "Düzəliş səbəbi" }), "Ünvanı tamamla");
   vi.mocked(eventReviewsApi.act).mockResolvedValue({ ...detail(), status: "changes_requested", note: "Ünvanı tamamla" });
   await userEvent.click(screen.getByRole("button", { name: "Qərarı təsdiqlə" }));
   expect(eventReviewsApi.act).toHaveBeenCalledWith(detail().id, expect.objectContaining({ action: "changes_requested", body: "Ünvanı tamamla" }));
@@ -69,18 +72,18 @@ it("requires a correction note and exposes a read-only mode", async () => {
 it("blocks stale decisions until refreshed and retains the unsent text", async () => {
   vi.mocked(eventReviewsApi.act).mockRejectedValue(new ApiError({ kind: "http", status: 409, message: "Tədbir dəyişib" }));
   render(<TeamReviewDetail id={detail().id} />); await screen.findByText("Aysel");
-  await userEvent.type(screen.getByRole("textbox", { name: "Şərh və ya düzəliş səbəbi" }), "Yeni qeyd");
+  await userEvent.type(screen.getByRole("textbox", { name: "Daxili şərh" }), "Yeni qeyd");
   await userEvent.click(screen.getByRole("button", { name: "Daxili şərh əlavə et" }));
   await screen.findByText("Tədbir dəyişib");
   expect((screen.getByRole("button", { name: "Daxili şərh əlavə et" }) as HTMLButtonElement).disabled).toBe(true);
   await userEvent.click(screen.getByRole("button", { name: "Məlumatları yenilə" }));
   await waitFor(() => expect((screen.getByRole("button", { name: "Daxili şərh əlavə et" }) as HTMLButtonElement).disabled).toBe(false));
-  expect((screen.getByRole("textbox", { name: "Şərh və ya düzəliş səbəbi" }) as HTMLTextAreaElement).value).toBe("Yeni qeyd");
+  expect((screen.getByRole("textbox", { name: "Daxili şərh" }) as HTMLTextAreaElement).value).toBe("Yeni qeyd");
 });
 it("retries an uncertain write with the same request identity", async () => {
   vi.mocked(eventReviewsApi.act).mockRejectedValueOnce(new ApiError({ kind: "timeout", message: "timeout" }));
   render(<TeamReviewDetail id={detail().id} />); await screen.findByText("Aysel");
-  await userEvent.type(screen.getByRole("textbox", { name: "Şərh və ya düzəliş səbəbi" }), "Qeyd");
+  await userEvent.type(screen.getByRole("textbox", { name: "Daxili şərh" }), "Qeyd");
   await userEvent.click(screen.getByRole("button", { name: "Daxili şərh əlavə et" }));
   await userEvent.click(await screen.findByRole("button", { name: "Eyni sorğunu təkrar yoxla" }));
   await screen.findByText("Daxili şərh saxlanıldı.");
@@ -100,9 +103,9 @@ it("requires a reason and explicit cancellation confirmation, then shows pending
   vi.mocked(eventReviewsApi.act).mockResolvedValue({ ...detail(), status: "cancelled", note: "Məkan bağlanıb",
     refund_requests: [{ id: "refund", order_id: "order-123", amount: "25.00", currency: "AZN", status: "pending", created_at: "2026-09-10T10:00:00Z" }] });
   render(<TeamReviewDetail id={detail().id} />); await screen.findByText("Aysel");
-  expect((screen.getByRole("button", { name: "Tədbiri dayandır" }) as HTMLButtonElement).disabled).toBe(true);
-  await userEvent.type(screen.getByRole("textbox", { name: "Şərh və ya dayandırma səbəbi" }), "Məkan bağlanıb");
   await userEvent.click(screen.getByRole("button", { name: "Tədbiri dayandır" }));
+  expect((screen.getByRole("button", { name: "Qərarı təsdiqlə" }) as HTMLButtonElement).disabled).toBe(true);
+  await userEvent.type(screen.getByRole("textbox", { name: "Dayandırılma səbəbi" }), "Məkan bağlanıb");
   expect(eventReviewsApi.act).not.toHaveBeenCalled();
   expect(screen.getByRole("dialog").textContent).toContain("Pul avtomatik qaytarılmır");
   await userEvent.click(screen.getByRole("button", { name: "Qərarı təsdiqlə" }));

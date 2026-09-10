@@ -26,6 +26,7 @@ from rest_framework.views import APIView
 
 from .models import Event, EventPhoto, EventSubmission, Venue, VenuePlan, VenueSection, VenueSeat
 from .categories import resolve_category
+from .media import cover_thumbnail
 from .seat_plans import number, text, validate_layout
 from ticketing.models import TicketType
 
@@ -221,6 +222,10 @@ def output(item, detail=False):
     public_status = item.event.status
     result = {'id': str(item.pk), 'title': item.event.title, 'status': public_status if public_status != 'draft' else item.status, 'note': item.note, 'event_slug': item.event.slug, 'sales_start_at': item.event.ticket_types.order_by('sales_start_at').values_list('sales_start_at', flat=True).first()}
     result.update(submitted_at=item.created_at, updated_at=max(item.updated_at, item.event.updated_at))
+    snapshot = item.snapshot or {}
+    result.update(start_at=item.event.start_at,
+                  venue_name=(snapshot.get('schedule', {}).get('venue') or {}).get('name', ''),
+                  cover_thumbnail=cover_thumbnail((snapshot.get('media') or {}).get('cover', '')))
     if detail: result['snapshot'] = item.snapshot
     return result
 
@@ -233,14 +238,18 @@ class SubmissionEligibilityAPIView(APIView):
 class SubmissionListAPIView(APIView):
     permission_classes = [IsAuthenticated]
     def get(self, request):
-        return Response([output(item) for item in EventSubmission.objects.filter(owner=request.user).select_related('event')[:100]])
+        response = Response([output(item) for item in EventSubmission.objects.filter(owner=request.user).select_related('event')[:100]])
+        response['Cache-Control'] = 'private, no-store'
+        return response
 
 
 class SubmissionDetailAPIView(APIView):
     permission_classes = [IsAuthenticated]
     throttle_classes = [SubmissionThrottle]
     def get(self, request, pk):
-        return Response(output(get_object_or_404(EventSubmission.objects.select_related('event'), pk=pk, owner=request.user), True))
+        response = Response(output(get_object_or_404(EventSubmission.objects.select_related('event'), pk=pk, owner=request.user), True))
+        response['Cache-Control'] = 'private, no-store'
+        return response
 
     @transaction.atomic
     def put(self, request, pk):

@@ -97,6 +97,27 @@ class CancellationTests(APITestCase):
         self.assertEqual(self.act('cancelled', 'Cancel').status_code, 409)
         self.assertFalse(EventCancellation.objects.exists())
 
+    def test_owned_ticket_refund_status_comes_from_the_actual_refund_queue(self):
+        paid, tickets = self.purchased(self.buyer)
+        _, free_tickets = self.purchased(self.free_buyer, price='0.00')
+        _, refunded_tickets = self.purchased(self.viewer, refunded=True)
+        self.assertEqual(self.act('cancelled', 'Məkan bağlıdır').status_code, 200)
+        self.client.force_authenticate(self.buyer)
+        url = f'/api/tickets/{tickets[0].pk}/'
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['refund_status'], 'pending')
+        self.assertEqual(response.data['cancellation_reason'], 'Məkan bağlıdır')
+        self.assertTrue(response.data['event_cover_thumbnail'].startswith('data:image/jpeg;base64,'))
+        self.assertEqual(self.client.get('/api/tickets/').data[0]['refund_status'], 'pending')
+        RefundRequest.objects.filter(order=paid).delete()
+        self.assertIsNone(self.client.get(url).data['refund_status'])
+        self.client.force_authenticate(self.free_buyer)
+        self.assertIsNone(self.client.get(f'/api/tickets/{free_tickets[0].pk}/').data['refund_status'])
+        self.assertEqual(self.client.get(url).status_code, 404)
+        self.client.force_authenticate(self.viewer)
+        self.assertEqual(self.client.get(f'/api/tickets/{refunded_tickets[0].pk}/').data['refund_status'], 'refunded')
+
     def test_previously_refunded_tickets_and_payments_are_not_queued_again(self):
         partial, tickets = self.purchased(self.buyer, quantity=2)
         tickets[0].status = 'refunded'; tickets[0].save()

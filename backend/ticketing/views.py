@@ -3,7 +3,7 @@ import hmac
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Prefetch
+from django.db.models import Exists, OuterRef, Prefetch
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -34,7 +34,7 @@ from .checkins.services import (
     ticket_check_in_queryset,
 )
 from .inventory import annotate_inventory, get_inventory_snapshot
-from .models import Order, OrderItem, Payment, Ticket, TicketType
+from .models import Order, OrderItem, Payment, RefundRequest, Ticket, TicketType
 from .orders.expiration import expire_pending_orders
 from .orders.reservations import (
     OrderReservationError,
@@ -177,11 +177,14 @@ def ticket_read_queryset():
     return Ticket.objects.select_related(
         "event",
         "event__venue",
+        "event__cancellation",
         "owner",
         "order_item",
         "order_item__order",
         "order_item__ticket_type",
-    )
+    ).prefetch_related('event__submission').annotate(has_refund_request=Exists(RefundRequest.objects.filter(
+        event_id=OuterRef('event_id'), order_id=OuterRef('order_item__order_id'),
+    )))
 
 
 @extend_schema_view(
