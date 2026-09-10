@@ -249,6 +249,20 @@ class PaymentWebhookEvent(models.Model):
         return f"{self.provider} — {self.event_id}"
 
 
+class RefundRequest(models.Model):
+    """A durable manual refund queue; creation does not move any money."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    event = models.ForeignKey('events.Event', on_delete=models.PROTECT, related_name='refund_requests')
+    order = models.ForeignKey(Order, on_delete=models.PROTECT, related_name='refund_requests')
+    amount = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)])
+    currency = models.CharField(max_length=3, default='AZN')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at', 'id']
+        constraints = [models.UniqueConstraint(fields=['event', 'order'], name='unique_event_order_refund_request')]
+
+
 class Ticket(models.Model):
     class Status(models.TextChoices):
         VALID = "valid", "Valid"

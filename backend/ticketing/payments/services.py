@@ -5,6 +5,9 @@ from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.db.models import Count
 from django.utils import timezone
+from events.models import Event
+from events.cancellations import queue_cancellation_refund
+from ticketing.locks import lock_order_events
 
 from ticketing.models import (
     Order,
@@ -105,6 +108,9 @@ def _create_free_payment(order):
 
 @transaction.atomic
 def initiate_payment(*, order_id, buyer):
+    if not Order.objects.filter(pk=order_id, buyer=buyer).exists():
+        raise PaymentOrderNotFound
+    events = lock_order_events(order_id)
     try:
         order = (
             Order.objects
@@ -113,6 +119,9 @@ def initiate_payment(*, order_id, buyer):
         )
     except Order.DoesNotExist as exc:
         raise PaymentOrderNotFound from exc
+
+    if any(event.status == Event.Status.CANCELLED for event in events):
+        return PaymentInitiationResult(payment=None, conflict='Tədbir ləğv edilib. Ödəniş başlatmaq mümkün deyil.')
 
     existing_free_payment = (
         Payment.objects
@@ -219,12 +228,23 @@ def _mark_payment_succeeded(payment):
     payment.save(update_fields=["status", "updated_at"])
 
 
-def _process_success(*, payment, order, now):
+def _process_success(*, payment, order, now, events):
     if payment.status != Payment.Status.INITIATED:
         return PaymentProcessingResult(
             payment=payment,
             outcome="ignored",
         )
+
+    cancelled = [event for event in events if event.status == Event.Status.CANCELLED]
+    if cancelled:
+        _mark_payment_succeeded(payment)
+        if order.status == Order.Status.PENDING:
+            order.status = Order.Status.CANCELLED
+            order.save(update_fields=['status', 'updated_at'])
+        for event in cancelled:
+            queue_cancellation_refund(event, order, paid_amount=payment.amount)
+        return PaymentProcessingResult(payment=payment, outcome='conflict',
+            conflict='Tədbir ləğv edilib. Ödəniş alındı və geri ödəniş sorğusu yaradıldı; bilet verilmədi.')
 
     if (
         order.status == Order.Status.PENDING
@@ -344,6 +364,7 @@ def process_payment_event(
     if payment_locator is None:
         raise PaymentNotFound
 
+    events = lock_order_events(payment_locator['order_id'])
     order = (
         Order.objects
         .select_for_update()
@@ -404,6 +425,7 @@ def process_payment_event(
             payment=payment,
             order=order,
             now=now,
+            events=events,
         )
     else:
         result = _process_failure(

@@ -125,9 +125,12 @@ def reserve_order(*, buyer, items, idempotency_key=None):
         for item in items
     }
     ticket_type_ids = sorted(quantities)
+    locked_events = list(Event.objects.select_for_update().filter(
+        pk__in=TicketType.objects.filter(pk__in=ticket_type_ids).values('event_id')
+    ).order_by('pk'))
     locked_ticket_types = list(
         TicketType.objects
-        .select_for_update()
+        .select_for_update(of=('self',))
         .select_related("event")
         .filter(id__in=ticket_type_ids)
         .order_by("id")
@@ -153,8 +156,11 @@ def reserve_order(*, buyer, items, idempotency_key=None):
             status_code=400,
         )
 
+    if event_ids != {event.pk for event in locked_events}:
+        raise OrderReservationError('Bilet məlumatları dəyişib. Yenidən cəhd et.', status_code=409)
+
     now = timezone.now()
-    event = locked_ticket_types[0].event
+    event = locked_events[0]
 
     if event.status != Event.Status.PUBLISHED:
         raise OrderReservationError(

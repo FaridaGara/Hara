@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.db.models import OuterRef, Prefetch, Q, Subquery, Sum
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -400,8 +401,13 @@ class NotificationListAPIView(ListAPIView):
         return (
             Notification.objects
             .filter(user=self.request.user)
-            .select_related("event", "organizer")
+            .select_related("event__cancellation", "organizer")
         )
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        response = super().finalize_response(request, response, *args, **kwargs)
+        response['Cache-Control'] = 'private, no-store'
+        return response
 
 
 @extend_schema_view(
@@ -582,6 +588,8 @@ class OrganizerEventDetailAPIView(RetrieveUpdateDestroyAPIView):
             Event.objects
             .select_related("category", "venue", "organizer")
         )
+        if self.request.method not in ('GET', 'HEAD', 'OPTIONS'):
+            queryset = queryset.select_for_update(of=('self',))
 
         if self.request.user.is_superuser:
             return queryset
@@ -592,6 +600,7 @@ class OrganizerEventDetailAPIView(RetrieveUpdateDestroyAPIView):
     def has_ticket_sales(event):
         return event.tickets.exists()
 
+    @transaction.atomic
     def update(self, request, *args, **kwargs):
         event = self.get_object()
 
@@ -610,6 +619,7 @@ class OrganizerEventDetailAPIView(RetrieveUpdateDestroyAPIView):
 
         return super().update(request, *args, **kwargs)
 
+    @transaction.atomic
     def destroy(self, request, *args, **kwargs):
         event = self.get_object()
 

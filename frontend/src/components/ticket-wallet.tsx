@@ -42,9 +42,9 @@ function ticketPrice(amount: string, currency: string) {
 }
 
 function ticketStatus(ticket: Ticket) {
-  if (ticket.is_checked_in || ticket.status === "used") return "İstifadə edilib";
   if (ticket.status === "cancelled") return "Ləğv edilib";
   if (ticket.status === "refunded") return "Geri qaytarılıb";
+  if (ticket.is_checked_in || ticket.status === "used") return "İstifadə edilib";
   return "Aktiv";
 }
 
@@ -292,6 +292,7 @@ function TicketCard({
       </div>
 
       <div className="px-3 pb-3 text-center">
+        {ticket.status === "cancelled" || ticket.status === "refunded" ? <p className="p-4 text-sm text-black/65">Bilet etibarsızdır. <Link className="underline" href="/notifications">Bildirişlərə bax</Link></p> : <>
         <p className="mb-3 text-xs font-medium text-black/45">
           Bilet QR Kodu skan edin
         </p>
@@ -307,6 +308,7 @@ function TicketCard({
             label={`${ticket.event_title} üçün bilet QR kodu`}
           />
         </button>
+        </>}
       </div>
 
       <div className="relative flex h-6 items-center">

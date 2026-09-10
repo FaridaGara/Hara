@@ -383,6 +383,8 @@ class OrganizerFollowSerializer(serializers.Serializer):
 class NotificationSerializer(serializers.ModelSerializer):
     event_slug = serializers.CharField(source="event.slug", read_only=True)
     event_title = serializers.CharField(source="event.title", read_only=True)
+    event_status = serializers.CharField(source='event.status', read_only=True, allow_null=True)
+    cancellation_reason = serializers.CharField(source='event.cancellation.reason', read_only=True, allow_null=True)
     organizer_name = serializers.SerializerMethodField()
 
     class Meta:
@@ -394,6 +396,8 @@ class NotificationSerializer(serializers.ModelSerializer):
             "body",
             "event_slug",
             "event_title",
+            "event_status",
+            "cancellation_reason",
             "organizer_name",
             "read_at",
             "created_at",
@@ -474,6 +478,10 @@ class OrganizerEventSerializer(serializers.ModelSerializer):
             "status",
             getattr(self.instance, "status", Event.Status.DRAFT),
         )
+
+        if self.instance and (self.instance.status == Event.Status.CANCELLED or
+                (self.instance.status == Event.Status.PUBLISHED and event_status == Event.Status.CANCELLED)):
+            raise serializers.ValidationError({'status': 'Dayandırmanı komandanın tədbir yoxlaması bölməsindən idarə et. Ləğv edilmiş tədbir yenidən yayımlana bilməz.'})
 
         if start_at and end_at and end_at <= start_at:
             raise serializers.ValidationError(

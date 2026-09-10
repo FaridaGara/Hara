@@ -1,6 +1,7 @@
 import uuid
 from django import forms
 from django.contrib import admin
+from django.db import transaction
 from django.core.exceptions import ValidationError
 from rest_framework.exceptions import ValidationError as APIValidationError
 from django.contrib.gis.admin import GISModelAdmin
@@ -126,6 +127,20 @@ class EventAdmin(admin.ModelAdmin):
     )
     readonly_fields = ("slug", "created_at", "updated_at")
     date_hierarchy = "start_at"
+
+    def get_readonly_fields(self, request, obj=None):
+        # Published events are stopped through the audited team decision flow.
+        if obj and obj.status in (Event.Status.PUBLISHED, Event.Status.CANCELLED):
+            return (*self.readonly_fields, 'status')
+        return self.readonly_fields
+
+    @transaction.atomic
+    def save_model(self, request, obj, form, change):
+        if change:
+            current = Event.objects.select_for_update().get(pk=obj.pk)
+            if current.status in (Event.Status.PUBLISHED, Event.Status.CANCELLED):
+                obj.status = current.status
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(EventPhoto)

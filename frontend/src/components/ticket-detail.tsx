@@ -122,10 +122,7 @@ export function TicketDetail({
             </div>
             <div>
               <dt className="font-bold text-white/35 uppercase">Məbləğ</dt>
-              <dd className="mt-1 font-semibold">{ticket.unit_price}</dd>
-              <dd className="mt-1 text-xs text-white/40">
-                Valyuta Ticket API response-unda yoxdur
-              </dd>
+              <dd className="mt-1 font-semibold">{ticket.unit_price} {ticket.currency}</dd>
             </div>
             <div>
               <dt className="font-bold text-white/35 uppercase">Check-in</dt>
@@ -143,14 +140,15 @@ export function TicketDetail({
           </dl>
 
           <section className="mt-7 rounded-2xl border border-white/10 bg-white/[0.04] p-5">
-            <h2 className="font-bold">QR payload</h2>
+            {ticket.status === "cancelled" || ticket.status === "refunded" ? <><h2 className="font-bold">{ticket.status === "cancelled" ? "Bilet ləğv edilib" : "Bilet geri qaytarılıb"}</h2><p className="mt-2">Bu bilet giriş üçün etibarsızdır.</p><Link className="mt-3 inline-block underline" href="/notifications">Bildirişlərə bax</Link></> : <>
+            <h2 className="font-bold">Biletin giriş kodu</h2>
             <p className="mt-1 text-xs leading-5 text-white/45">
-              API yalnız unikal UUID payload qaytarır; saxta QR şəkli yaradılmır.
-              Girişdə bu dəyəri səlahiyyətli check-in sisteminə təqdim et.
+              Girişdə bu kodu tədbirin yoxlama komandasına təqdim et.
             </p>
             <code className="mt-4 block overflow-x-auto rounded-xl bg-black/30 p-4 text-sm text-[#b9bcff]">
               {ticket.qr_code}
             </code>
+            </>}
           </section>
         </div>
       </article>

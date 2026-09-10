@@ -1,6 +1,18 @@
 from django.contrib import admin
 
-from .models import Payment, PaymentWebhookEvent
+from .models import Payment, PaymentWebhookEvent, RefundRequest
+
+
+@admin.register(RefundRequest)
+class RefundRequestAdmin(admin.ModelAdmin):
+    list_display = ['id', 'event', 'order', 'amount', 'currency', 'created_at']
+    search_fields = ['event__title', 'order__id', 'order__buyer__email']
+    list_filter = ['currency']
+    readonly_fields = ['id', 'event', 'order', 'amount', 'currency', 'created_at']
+
+    def has_add_permission(self, request): return False
+    def has_change_permission(self, request, obj=None): return False
+    def has_delete_permission(self, request, obj=None): return False
 
 
 @admin.register(Payment)

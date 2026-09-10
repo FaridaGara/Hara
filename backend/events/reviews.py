@@ -19,6 +19,11 @@ def review_output(item, *, detail=False, user):
     data['version'] = review_version(item)
     data['can_moderate'] = can_review_events(user, change=True)
     if detail:
+        data['refund_requests'] = [
+            {'id': str(refund.pk), 'order_id': str(refund.order_id), 'amount': str(refund.amount),
+             'currency': refund.currency, 'status': 'pending', 'created_at': refund.created_at}
+            for refund in item.event.refund_requests.all()
+        ]
         data['history'] = [{'id': str(log.pk), 'action': log.action, 'body': log.body,
                             'author': log.author.display_name or log.author.get_full_name() or log.author.email,
                             'created_at': log.created_at} for log in item.review_logs.select_related('author')]
