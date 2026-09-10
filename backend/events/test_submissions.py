@@ -58,6 +58,20 @@ class SubmissionTests(APITestCase):
         self.assertEqual(self.send().status_code, 200)
         self.assertEqual(Category.objects.count(), 1)
 
+    def test_owner_list_contains_private_compact_previews_without_the_snapshot(self):
+        self.send()
+        response = self.client.get('/api/event-submissions/')
+        self.assertEqual(response['Cache-Control'], 'private, no-store')
+        item = response.data[0]
+        self.assertNotIn('snapshot', item)
+        self.assertEqual(item['venue_name'], 'Hall')
+        self.assertEqual(item['start_at'], Event.objects.get().start_at)
+        image = Image.open(io.BytesIO(base64.b64decode(item['cover_thumbnail'].split(',')[1])))
+        self.assertLessEqual(image.width, 144)
+        self.assertLessEqual(image.height, 176)
+        self.client.force_authenticate(self.other)
+        self.assertEqual(self.client.get('/api/event-submissions/').data, [])
+
     def test_category_catalog_is_public_and_contains_only_active_options(self):
         Category.objects.filter(slug='musiqi').update(slug='music', name='Music')
         Category.objects.create(slug='tech', name='Technology')

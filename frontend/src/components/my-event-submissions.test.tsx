@@ -16,7 +16,7 @@ beforeEach(() => {
 it("shows server receipt, status and updates to published without replacing a draft", async () => {
   saveEventDraft(7, { ...structuredClone(EMPTY_EVENT_DRAFT), title: "Başqa qaralama" });
   render(<MyEventSubmissions />);
-  await screen.findByText("Yoxlanılır");
+  await screen.findByText("Yoxlamadadır");
   expect(screen.getByText("Göndərildi · Bakı vaxtı")).toBeTruthy();
   expect(screen.queryByRole("link", { name: "Tədbirə bax" })).toBeNull();
   vi.mocked(eventSubmissionsApi.list).mockResolvedValue([{ ...pending, status: "published" }]);
@@ -26,7 +26,7 @@ it("shows server receipt, status and updates to published without replacing a dr
   expect(readEventDraft(7).title).toBe("Başqa qaralama");
 });
 it("shows moderator notes on focus refresh and opens the requested correction", async () => {
-  render(<MyEventSubmissions />); await screen.findByText("Yoxlanılır");
+  render(<MyEventSubmissions />); await screen.findByText("Yoxlamadadır");
   const correction: EventSubmission = { ...pending, status: "changes_requested", note: "Ünvanı tamamla", snapshot: { ...structuredClone(EMPTY_EVENT_DRAFT), title: pending.title } };
   vi.mocked(eventSubmissionsApi.list).mockResolvedValue([correction]);
   vi.spyOn(eventSubmissionsApi, "get").mockResolvedValue(correction);
@@ -38,12 +38,23 @@ it("shows moderator notes on focus refresh and opens the requested correction", 
 });
 it("explains an empty list and preserves known status when refresh fails", async () => {
   vi.mocked(eventSubmissionsApi.list).mockResolvedValueOnce([]);
-  render(<MyEventSubmissions />); await screen.findByText("Hələ tədbir göndərilməyib");
+  render(<MyEventSubmissions />); await screen.findByText("İlk tədbirinizi göndərin");
   expect(screen.getByText(/Qaralama saxlamaq tədbiri yoxlamaya göndərmir/)).toBeTruthy();
   await userEvent.click(screen.getByRole("button", { name: "Statusları yenilə" }));
-  await screen.findByText("Yoxlanılır");
+  await screen.findByText("Yoxlamadadır");
   vi.mocked(eventSubmissionsApi.list).mockRejectedValue(new Error("offline"));
   await userEvent.click(screen.getByRole("button", { name: "Statusları yenilə" }));
   await screen.findByRole("alert");
-  expect(screen.getByText("Yoxlanılır")).toBeTruthy();
+  expect(screen.getByText("Yoxlamadadır")).toBeTruthy();
+});
+
+it("filters all lifecycle states using server records without hiding corrections or cancellations", async () => {
+  vi.mocked(eventSubmissionsApi.list).mockResolvedValue([pending, { ...pending, id: "cancelled", title: "Dayandırılmış tədbir", status: "cancelled", note: "Məkan bağlıdır" }]);
+  render(<MyEventSubmissions />);
+  await screen.findByRole("article", { name: "Dayandırılmış tədbir" });
+  await userEvent.click(screen.getByRole("button", { name: "Yoxlamada · 1" }));
+  expect(screen.queryByRole("article", { name: "Dayandırılmış tədbir" })).toBeNull();
+  await userEvent.click(screen.getByRole("button", { name: "Dayandırılıb · 1" }));
+  expect(screen.getByText("Məkan bağlıdır")).toBeTruthy();
+  expect(screen.queryByRole("link", { name: "Tədbirə bax" })).toBeNull();
 });

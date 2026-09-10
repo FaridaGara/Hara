@@ -50,6 +50,10 @@ export function formatMoney(decimal: string, currency: string) {
   return `${normalized || "0"} ${currency}`;
 }
 
+export function safeEventImageUrl(value: string) {
+  return /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(value) ? value : safePosterUrl(value);
+}
+
 export function safePosterUrl(value: string) {
   if (!value) {
     return null;

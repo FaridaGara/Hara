@@ -38,9 +38,9 @@ describe("step five review", () => {
     vi.mocked(eventSubmissionsApi.eligibility).mockImplementation(async (_signal, freeEvent) => ({ eligible: Boolean(freeEvent), detail: "Hazırdır" }));
     const submit = vi.spyOn(eventSubmissionsApi, "submit").mockImplementation(async id => pending(id));
     render(<Harness />); await confirm();
-    expect(await screen.findByRole("heading", { name: "Tədbirin yoxlanılır" })).toBeTruthy();
-    expect(screen.getByText(/uğurla HARA komandasına göndərildi/)).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Tədbirlərim" }).getAttribute("href")).toBe("/my-events");
+    expect(await screen.findByRole("heading", { name: "Yoxlamaya göndərildi" })).toBeTruthy();
+    expect(screen.getByText(/Tədbiriniz artıq HARA komandasındadır/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Statusu izlə" }).getAttribute("href")).toBe("/my-events");
     expect(submit).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ sales: draft.sales }));
   });
   it("previews the selected image and settings and returns without losing them", async () => {
@@ -66,7 +66,7 @@ describe("step five review", () => {
     const button = screen.getByRole("button", { name: "Təsdiqlə və göndər" }); fireEvent.click(button); fireEvent.click(button);
     expect(submit).toHaveBeenCalledTimes(1);
     await act(async () => resolve(pending(readEventDraft(7).submissionId!)));
-    expect(await screen.findByRole("heading", { name: "Tədbirin yoxlanılır" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Yoxlamaya göndərildi" })).toBeTruthy();
     expect(screen.queryByRole("link", { name: "Tədbirə bax" })).toBeNull();
   });
   it("resolves a lost response with GET without resubmitting", async () => {
@@ -74,7 +74,7 @@ describe("step five review", () => {
     render(<Harness />); await confirm(); await screen.findByText(/Göndərilmə təsdiqi gözlənilir/);
     vi.mocked(eventSubmissionsApi.get).mockResolvedValue(pending(readEventDraft(7).submissionId!));
     await userEvent.click(screen.getByRole("button", { name: "Statusu yoxla" }));
-    expect(await screen.findByRole("heading", { name: "Tədbirin yoxlanılır" })).toBeTruthy(); expect(submit).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole("heading", { name: "Yoxlamaya göndərildi" })).toBeTruthy(); expect(submit).toHaveBeenCalledTimes(1);
   });
   it("does not send if durable request storage fails", async () => {
     const submit = vi.spyOn(eventSubmissionsApi, "submit"); render(<Harness />);
@@ -87,7 +87,7 @@ describe("step five review", () => {
   it("reopens real moderation status after a reload", async () => {
     const id = crypto.randomUUID(); saveEventDraft(7, { ...validDraft(), submissionId: id });
     vi.mocked(eventSubmissionsApi.get).mockResolvedValue(pending(id)); render(<Harness />);
-    expect(await screen.findByRole("heading", { name: "Tədbirin yoxlanılır" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Yoxlamaya göndərildi" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Yoxlamaya göndər" })).toBeNull();
   });
   it("routes a rejected category back to details without claiming submission succeeded", async () => {
@@ -95,7 +95,7 @@ describe("step five review", () => {
     render(<Harness />); await confirm();
     await userEvent.click(await screen.findByRole("button", { name: "Kateqoriyanı yenidən seç" }));
     expect(onEdit).toHaveBeenCalledWith(1);
-    expect(screen.queryByRole("heading", { name: "Tədbirin yoxlanılır" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Yoxlamaya göndərildi" })).toBeNull();
   });
   it("blocks unqualified accounts without claiming verification", async () => {
     vi.mocked(eventSubmissionsApi.eligibility).mockResolvedValue({ eligible: false, detail: "Təşkilatçı hesabı tələb olunur." });

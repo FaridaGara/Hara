@@ -14,6 +14,8 @@ import { eventSubmissionsApi, type EventSubmission, type SubmissionEligibility }
 import { AuthMessage } from "./auth-ui";
 import { WizardFrame, WizardIcon, WizardProgress } from "./event-wizard-layout";
 import { SeatPlanCanvas } from "./seat-plan-canvas";
+import { LifecyclePage, LifecycleIntro, Notice, SubmissionCard } from "./lifecycle-ui";
+import ui from "./lifecycle-ui.module.css";
 import styles from "./event-wizard.module.css";
 
 type DraftState = ReturnType<typeof useEventDraft>;
@@ -110,6 +112,19 @@ export function EventReviewStep({ draft, replaceDraft, save, notice, storageErro
     { step: 3, title: "Satış və biletlər", summary: draft.sales.tickets.map(t => `${t.name} · ${t.quantity} bilet · ${t.paymentType === "free" ? "Pulsuz" : `${t.price} AZN`}`).join("; "), icon: "ticket" },
     { step: 4, title: "Media", summary: `${draft.media?.cover ? "Üz qabığı hazırdır" : "Üz qabığı çatışmır"} · ${draft.media?.gallery.length ?? 0} əlavə şəkil`, icon: "review-document" },
   ];
+  if (locked && submission && view !== "preview") return <LifecyclePage title={submission.status === "pending" ? "Göndəriş tamamlandı" : "Tədbirin statusu"} backHref="/my-events" footer={<Link className={ui.primary} href="/my-events">Statusu izlə</Link>}>
+    <LifecycleIntro title={submission.status === "pending" ? "Yoxlamaya göndərildi" : statusTitles[submission.status]}>{submission.status === "pending" ? "Tədbiriniz artıq HARA komandasındadır." : "Tədbirinizin son statusu burada görünür."}</LifecycleIntro>
+    <Notice title={submission.status === "pending" ? "Növbəti addım bizdədir" : "Status yeniləndi"} role="status"><p>{submission.status === "pending" ? "Komanda məlumatları yoxlayacaq. Təsdiq və ya düzəliş rəyi Tədbirlərim bölməsində görünəcək." : submission.status === "published" ? "Tədbir artıq iştirakçılara görünür." : "Tədbirin son statusu serverdən alındı."}</p></Notice>
+    <SubmissionCard item={{ ...submission, snapshot: previewDraft }} action={submission.status === "published" && submission.event_slug ? <Link className={ui.secondary} href={`/events/${submission.event_slug}`}>Tədbirə bax</Link> : undefined}>
+      {submission.submitted_at ? <p className={ui.meta}>Göndərildi: {submissionTime(submission.submitted_at)} · Bakı vaxtı</p> : null}
+      {submission.note ? <p className={ui.note}><strong>Moderatorun qeydi</strong>{submission.note}</p> : null}
+      {submission.status === "pending" ? <p className={ui.meta}>Göndəriş uğurla qeydə alındı.</p> : null}
+      {submission.status === "published" && submission.sales_start_at && Date.parse(submission.sales_start_at) > checkedAt ? <p className={ui.meta}>Satış {submissionTime(submission.sales_start_at)} tarixində açılacaq · Bakı vaxtı.</p> : null}
+    </SubmissionCard>
+    {error ? <AuthMessage>{error}</AuthMessage> : null}
+    <button className={ui.textButton} disabled={checking || busy} onClick={retryStatus}>{checking ? "Status yoxlanılır…" : "Statusu yenilə"}</button>
+    <button className={ui.secondary} onClick={() => setView("preview")}>İştirakçı kimi önbaxış</button>
+  </LifecyclePage>;
   return <WizardFrame subtitle={draft.title} onSave={() => save()} onBack={() => {
     if (busy) return;
     if (view !== "review") setView("review"); else if (frozen) onExit(); else onBack();

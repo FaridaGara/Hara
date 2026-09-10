@@ -10,7 +10,7 @@ import {
   type Ticket,
   type TicketListFilters,
 } from "@/lib/api";
-import { formatBakuDate, safePosterUrl } from "@/lib/format";
+import { formatBakuDate, safeEventImageUrl } from "@/lib/format";
 
 import { MobileTabBar } from "./mobile-tab-bar";
 
@@ -226,7 +226,7 @@ function TicketCard({
   onOpenQr: () => void;
   priority?: boolean;
 }) {
-  const poster = safePosterUrl(ticket.event_cover_image_url ?? "");
+  const poster = safeEventImageUrl(ticket.event_cover_thumbnail || ticket.event_cover_image_url || "");
 
   return (
     <article className="overflow-hidden rounded-tl-3xl rounded-tr-lg rounded-br-3xl rounded-bl-lg border border-[#f2f2f2] bg-[#f3f5f7] text-[#18181a]">
@@ -234,19 +234,19 @@ function TicketCard({
         <div className="relative size-[120px] shrink-0 overflow-hidden rounded-3xl bg-[#20212b]">
           {/* Arbitrary HTTPS poster hosts come from the trusted API contract. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={poster ?? "/figma/jazz.png"}
+          {poster ? <img
+            src={poster || undefined}
             alt={`${ticket.event_title} posteri`}
             loading={priority ? "eager" : "lazy"}
             className="h-full w-full object-cover"
-          />
+          /> : null}
         </div>
 
         <div className="min-w-0 flex-1 py-1">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <Link
-                href={`/events/${encodeURIComponent(ticket.event_slug)}`}
+                href={ticket.status === "cancelled" || ticket.status === "refunded" ? `/tickets/${ticket.id}` : `/events/${encodeURIComponent(ticket.event_slug)}`}
                 className="line-clamp-2 text-[17px] leading-[21px] font-semibold tracking-[-0.2px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#565dd8]"
               >
                 {ticket.event_title}

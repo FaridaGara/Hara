@@ -1,157 +1,61 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-
 import { ApiError, ticketsApi, type Ticket } from "@/lib/api";
-import { formatBakuDate } from "@/lib/format";
-
-import { InlineError, PageLoader, StatePanel } from "./states";
+import { formatBakuDate, safeEventImageUrl } from "@/lib/format";
+import { LifecyclePage, LifecycleLoading, LifecycleState, Notice } from "./lifecycle-ui";
+import css from "./lifecycle-ui.module.css";
 
 type LoadTicket = (ticketId: string, signal?: AbortSignal) => Promise<Ticket>;
+type DetailState = { kind: "loading" } | { kind: "success"; ticket: Ticket } | { kind: "not-found" } | { kind: "error"; message: string };
 
-type DetailState =
-  | { kind: "loading" }
-  | { kind: "success"; ticket: Ticket }
-  | { kind: "not-found" }
-  | { kind: "error"; message: string };
+export function TicketDetail({ ticketId, loadTicket = ticketsApi.detail }: { ticketId: string; loadTicket?: LoadTicket }) {
+  // Changing tickets remounts the request state so another ticket can never flash here.
+  return <TicketContent key={ticketId} ticketId={ticketId} loadTicket={loadTicket} />;
+}
 
-export function TicketDetail({
-  ticketId,
-  loadTicket = ticketsApi.detail,
-}: {
-  ticketId: string;
-  loadTicket?: LoadTicket;
-}) {
+function TicketContent({ ticketId, loadTicket }: { ticketId: string; loadTicket: LoadTicket }) {
   const [state, setState] = useState<DetailState>({ kind: "loading" });
   const [retryKey, setRetryKey] = useState(0);
-
   useEffect(() => {
     const controller = new AbortController();
-
-    loadTicket(ticketId, controller.signal)
-      .then((ticket) => setState({ kind: "success", ticket }))
-      .catch((error) => {
-        if (error instanceof ApiError && error.kind === "cancelled") {
-          return;
-        }
-        if (error instanceof ApiError && error.status === 404) {
-          setState({ kind: "not-found" });
-          return;
-        }
-        setState({
-          kind: "error",
-          message:
-            error instanceof ApiError
-              ? error.message
-              : "Bilet məlumatını yükləmək mümkün olmadı.",
-        });
-      });
-
+    loadTicket(ticketId, controller.signal).then(ticket => {
+      if (!controller.signal.aborted) setState({ kind: "success", ticket });
+    }).catch(error => {
+      if (controller.signal.aborted || (error instanceof ApiError && error.kind === "cancelled")) return;
+      if (error instanceof ApiError && error.status === 404) setState({ kind: "not-found" });
+      else setState({ kind: "error", message: error instanceof ApiError ? error.message : "Bilet məlumatını yükləmək mümkün olmadı." });
+    });
     return () => controller.abort();
   }, [loadTicket, retryKey, ticketId]);
 
-  if (state.kind === "loading") {
-    return <PageLoader label="Bilet yüklənir…" />;
-  }
-
-  if (state.kind === "not-found") {
-    return (
-      <main className="mx-auto w-full max-w-2xl px-4 py-10 sm:px-6">
-        <StatePanel
-          title="Bilet tapılmadı"
-          message="Bu bilet mövcud deyil və ya başqa istifadəçiyə aiddir."
-          action={
-            <Link
-              href="/tickets"
-              className="inline-grid min-h-11 place-items-center rounded-xl bg-white px-5 text-sm font-bold text-[#18181a]"
-            >
-              Biletlərimə qayıt
-            </Link>
-          }
-        />
-      </main>
-    );
-  }
-
-  if (state.kind === "error") {
-    return (
-      <main className="mx-auto w-full max-w-2xl space-y-4 px-4 py-10 sm:px-6">
-        <InlineError message={state.message} />
-        <button
-          type="button"
-          onClick={() => {
-            setState({ kind: "loading" });
-            setRetryKey((value) => value + 1);
-          }}
-          className="min-h-11 rounded-xl bg-white px-5 text-sm font-bold text-[#18181a]"
-        >
-          Yenidən cəhd et
-        </button>
-      </main>
-    );
-  }
-
-  const ticket = state.ticket;
-  return (
-    <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-10">
-      <Link
-        href="/tickets"
-        className="inline-grid min-h-11 place-items-center rounded-xl px-2 text-sm font-semibold text-white/55 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#98ff00]"
-      >
-        ← Biletlərimə qayıt
-      </Link>
-
-      <article className="mt-3 overflow-hidden rounded-3xl border border-white/10 bg-[#111118]">
-        <div className="border-b border-dashed border-white/15 bg-[radial-gradient(circle_at_20%_10%,rgba(86,93,216,0.35),transparent_52%)] p-6 sm:p-8">
-          <p className="text-xs font-bold tracking-[0.16em] text-[#98ff00] uppercase">
-            {ticket.ticket_type_name}
-          </p>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight">{ticket.event_title}</h1>
-          <p className="mt-4 text-sm font-semibold">
-            {formatBakuDate(ticket.event_start_at)}
-          </p>
-          <p className="mt-1 text-sm text-white/50">{ticket.event_location_name}</p>
-        </div>
-
-        <div className="p-6 sm:p-8">
-          <dl className="grid gap-5 text-sm sm:grid-cols-2">
-            <div>
-              <dt className="font-bold text-white/35 uppercase">İştirakçı</dt>
-              <dd className="mt-1 font-semibold">{ticket.owner_display_name}</dd>
-            </div>
-            <div>
-              <dt className="font-bold text-white/35 uppercase">Məbləğ</dt>
-              <dd className="mt-1 font-semibold">{ticket.unit_price} {ticket.currency}</dd>
-            </div>
-            <div>
-              <dt className="font-bold text-white/35 uppercase">Check-in</dt>
-              <dd className="mt-1 font-semibold">
-                {ticket.is_checked_in ? "Check-in edilib" : "Check-in edilməyib"}
-              </dd>
-              {ticket.checked_in_at ? (
-                <dd className="mt-1 text-white/45">{formatBakuDate(ticket.checked_in_at)}</dd>
-              ) : null}
-            </div>
-            <div>
-              <dt className="font-bold text-white/35 uppercase">Bitmə vaxtı</dt>
-              <dd className="mt-1 font-semibold">{formatBakuDate(ticket.event_end_at)}</dd>
-            </div>
-          </dl>
-
-          <section className="mt-7 rounded-2xl border border-white/10 bg-white/[0.04] p-5">
-            {ticket.status === "cancelled" || ticket.status === "refunded" ? <><h2 className="font-bold">{ticket.status === "cancelled" ? "Bilet ləğv edilib" : "Bilet geri qaytarılıb"}</h2><p className="mt-2">Bu bilet giriş üçün etibarsızdır.</p><Link className="mt-3 inline-block underline" href="/notifications">Bildirişlərə bax</Link></> : <>
-            <h2 className="font-bold">Biletin giriş kodu</h2>
-            <p className="mt-1 text-xs leading-5 text-white/45">
-              Girişdə bu kodu tədbirin yoxlama komandasına təqdim et.
-            </p>
-            <code className="mt-4 block overflow-x-auto rounded-xl bg-black/30 p-4 text-sm text-[#b9bcff]">
-              {ticket.qr_code}
-            </code>
-            </>}
-          </section>
-        </div>
+  const ticket = state.kind === "success" ? state.ticket : null;
+  const cancelled = ticket?.status === "cancelled" || ticket?.status === "refunded";
+  const used = ticket?.is_checked_in || ticket?.status === "used";
+  const cover = safeEventImageUrl(ticket?.event_cover_thumbnail || ticket?.event_cover_image_url || "");
+  const paid = ticket ? Number(ticket.unit_price) > 0 : false;
+  const pending = ticket?.status === "cancelled" && ticket.refund_status === "pending";
+  return <LifecyclePage title="Bilet detalları" backHref="/tickets" footer={<Link className={css.primary} href={cancelled ? "/notifications" : "/tickets"}>{cancelled ? "Bildirişlərə keç" : "Biletlərimə qayıt"}</Link>}>
+    {state.kind === "loading" ? <LifecycleLoading label="Bilet yüklənir…" /> : null}
+    {state.kind === "not-found" ? <LifecycleState title="Bilet tapılmadı">Bu bilet mövcud deyil və ya başqa istifadəçiyə aiddir.</LifecycleState> : null}
+    {state.kind === "error" ? <LifecycleState title="Yükləmək mümkün olmadı" error action={<button className={css.secondary} onClick={() => { setState({ kind: "loading" }); setRetryKey(value => value + 1); }}>Yenidən cəhd et</button>}>{state.message}</LifecycleState> : null}
+    {ticket ? <>
+      <article className={css.ticket} aria-label={ticket.event_title}>
+        <span className={css.status}>{ticket.status === "refunded" ? "Geri qaytarılıb" : cancelled ? "Ləğv edilib" : used ? "İstifadə edilib" : "Aktiv bilet"}</span>
+        {cover ? <Image unoptimized className={css.ticketCover} src={cover} alt="" width={338} height={112} /> : null}
+        <div className={css.ticketInfo}><h1>{ticket.event_title}</h1><p className={css.meta}>{formatBakuDate(ticket.event_start_at)}</p><p className={css.meta}>{ticket.event_location_name}</p></div>
+        <div className={css.ticketLine}><span>{ticket.ticket_type_name}</span><span>{paid ? `${ticket.unit_price} ${ticket.currency}` : "Ödənişsiz"}</span></div>
+        <section className={css.ticketCode}>
+          {cancelled || used ? <><h2>{cancelled ? "Giriş bağlıdır" : "Giriş qeydə alınıb"}</h2><p>{cancelled ? "Bu bilet giriş üçün etibarsızdır." : "Bu bilet artıq istifadə edilib."}</p>{used && ticket.checked_in_at ? <p>{formatBakuDate(ticket.checked_in_at)}</p> : null}</> : <><h2>Biletin giriş kodu</h2><p>Girişdə bu kodu tədbirin yoxlama komandasına təqdim edin.</p><code>{ticket.qr_code}</code></>}
+        </section>
+        <dl className={css.receipt}><div><dt>Bilet №</dt><dd>{ticket.id}</dd></div><div><dt>İştirakçı:</dt><dd>{ticket.owner_display_name}</dd></div><div><dt>Bitmə vaxtı:</dt><dd>{formatBakuDate(ticket.event_end_at)}</dd></div></dl>
       </article>
-    </main>
-  );
+      {cancelled ? <Notice accent={pending} title={ticket.status === "refunded" ? "Geri ödəniş tamamlanıb" : pending ? "Geri ödəniş gözlənilir" : "Bilet ləğv edilib"}>
+        <p>{ticket.status === "refunded" ? "Bilet sistemdə geri qaytarılmış kimi qeyd edilib. Bu biletlə giriş mümkün deyil." : pending ? "Sifarişiniz geri ödəniş üçün qeydə alınıb. Məbləğ hələ qaytarılmayıb; komanda müraciəti ayrıca emal edəcək." : paid ? "Biletiniz etibarsızdır. Geri ödənişlə bağlı məlumatı bildirişlərinizdən izləyin." : "Ödənişsiz biletiniz etibarsızdır. Bu bilet üçün geri ödəniş tələb olunmur."}</p>
+        {ticket.cancellation_reason ? <p className={css.note}>Ləğv səbəbi: {ticket.cancellation_reason}</p> : null}
+      </Notice> : null}
+    </> : null}
+  </LifecyclePage>;
 }

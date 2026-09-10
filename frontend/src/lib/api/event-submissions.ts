@@ -5,6 +5,7 @@ export type EventSubmission = {
   id: string; status: "pending" | "changes_requested" | "published" | "cancelled" | "completed";
   title: string; note: string; event_slug: string; sales_start_at: string | null;
   submitted_at?: string; updated_at?: string;
+  start_at?: string; venue_name?: string; cover_thumbnail?: string;
   snapshot?: EventDraft;
 };
 export type SubmissionEligibility = { eligible: boolean; detail: string };
