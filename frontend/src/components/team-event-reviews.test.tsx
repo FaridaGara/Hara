@@ -94,3 +94,20 @@ it("lists the review queue and filters by creator email", async () => {
   await userEvent.click(screen.getByRole("button", { name: "Axtar" }));
   expect(eventReviewsApi.list).toHaveBeenLastCalledWith("pending", "aysel@example.com", 1, expect.any(AbortSignal));
 });
+
+it("requires a reason and explicit cancellation confirmation, then shows pending refunds", async () => {
+  vi.mocked(eventReviewsApi.get).mockResolvedValue({ ...detail(), status: "published" });
+  vi.mocked(eventReviewsApi.act).mockResolvedValue({ ...detail(), status: "cancelled", note: "Məkan bağlanıb",
+    refund_requests: [{ id: "refund", order_id: "order-123", amount: "25.00", currency: "AZN", status: "pending", created_at: "2026-09-10T10:00:00Z" }] });
+  render(<TeamReviewDetail id={detail().id} />); await screen.findByText("Aysel");
+  expect((screen.getByRole("button", { name: "Tədbiri dayandır" }) as HTMLButtonElement).disabled).toBe(true);
+  await userEvent.type(screen.getByRole("textbox", { name: "Şərh və ya dayandırma səbəbi" }), "Məkan bağlanıb");
+  await userEvent.click(screen.getByRole("button", { name: "Tədbiri dayandır" }));
+  expect(eventReviewsApi.act).not.toHaveBeenCalled();
+  expect(screen.getByRole("dialog").textContent).toContain("Pul avtomatik qaytarılmır");
+  await userEvent.click(screen.getByRole("button", { name: "Qərarı təsdiqlə" }));
+  await screen.findByText("25.00 AZN · Gözlənilir");
+  expect(eventReviewsApi.act).toHaveBeenCalledWith(detail().id, expect.objectContaining({ action: "cancelled", body: "Məkan bağlanıb", version: detail().version }));
+  expect(screen.queryByRole("button", { name: "Tədbiri dayandır" })).toBeNull();
+  expect(screen.queryByRole("link", { name: "Yayımlanmış tədbirə bax" })).toBeNull();
+});

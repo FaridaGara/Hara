@@ -437,6 +437,8 @@ class OrganizerFollow(models.Model):
 
 class Notification(models.Model):
     class Type(models.TextChoices):
+        EVENT_CANCELLED = 'event_cancelled', 'Tədbir ləğv edildi'
+        REFUND_PENDING = 'refund_pending', 'Geri ödəniş gözlənilir'
         ORGANIZER_EVENT_PUBLISHED = (
             "organizer_event_published",
             "Organizer event published",
@@ -552,6 +554,7 @@ class SubmissionReviewLog(models.Model):
         COMMENT = 'comment', 'Daxili şərh'
         CHANGES_REQUESTED = 'changes_requested', 'Düzəliş tələb edildi'
         APPROVED = 'approved', 'Təsdiqləndi və yayımlandı'
+        CANCELLED = 'cancelled', 'Tədbir dayandırıldı'
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     submission = models.ForeignKey(EventSubmission, on_delete=models.CASCADE, related_name='review_logs')
@@ -562,3 +565,10 @@ class SubmissionReviewLog(models.Model):
 
     class Meta:
         ordering = ['-created_at', '-id']
+
+
+class EventCancellation(models.Model):
+    event = models.OneToOneField(Event, on_delete=models.PROTECT, related_name='cancellation')
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='event_cancellations')
+    reason = models.TextField(max_length=2000)
+    created_at = models.DateTimeField(auto_now_add=True)

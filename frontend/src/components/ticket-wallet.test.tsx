@@ -9,6 +9,19 @@ import { TicketDetail } from "./ticket-detail";
 import { TicketWallet } from "./ticket-wallet";
 
 describe("ticket wallet", () => {
+  it("shows cancelled status even for a previously checked-in ticket and hides its QR", async () => {
+    render(<TicketWallet loadTickets={vi.fn().mockResolvedValue([{ ...ticketFixture, status: "cancelled", is_checked_in: true }])} />);
+    await screen.findByText("Ləğv edilib");
+    expect(screen.queryByRole("button", { name: /bilet QR kodunu böyüt/ })).toBeNull();
+    expect(screen.getByRole("link", { name: "Bildirişlərə bax" }).getAttribute("href")).toBe("/notifications");
+  });
+
+  it("does not expose an invalid ticket's entry code in its detail", async () => {
+    render(<TicketDetail ticketId={ticketFixture.id} loadTicket={vi.fn().mockResolvedValue({ ...ticketFixture, status: "cancelled" })} />);
+    await screen.findByText("Bilet ləğv edilib");
+    expect(screen.queryByText(ticketFixture.qr_code)).toBeNull();
+  });
+
   it("owned ticket-ləri Figma wallet kartında göstərir", async () => {
     render(
       <TicketWallet loadTickets={vi.fn().mockResolvedValue([ticketFixture])} />,
@@ -83,7 +96,7 @@ describe("ticket detail", () => {
     expect(screen.getByText(ticketFixture.owner_display_name)).toBeTruthy();
     expect(container.textContent).not.toContain("aysel@example.com");
     expect(container.textContent).not.toContain("+994");
-    expect(container.textContent).not.toContain("AZN");
+    expect(container.textContent).toContain(`${ticketFixture.unit_price} ${ticketFixture.currency}`);
   });
 
   it("404 üçün not-found state göstərir", async () => {

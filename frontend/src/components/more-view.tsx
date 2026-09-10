@@ -23,7 +23,7 @@ const ACCOUNT_ITEMS: MenuItem[] = [
 
 const APP_ITEMS: MenuItem[] = [
   { label: "Dil", icon: "/figma/more/language.svg" },
-  { label: "Bildirişlər", icon: "/figma/more/notifications.svg" },
+  { label: "Bildirişlər", icon: "/figma/more/notifications.svg", href: "/notifications" },
   { label: "Görünüş", icon: "/figma/more/appearance.svg", action: "appearance" },
   { label: "İcazələr", icon: "/figma/more/permissions.svg" },
 ];

@@ -7,6 +7,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework.exceptions import APIException, ValidationError
 from .models import Event, EventSubmission, SubmissionReviewLog, VenuePlan
 from .submissions import eligibility, is_free_event, validate_snapshot
+from .cancellations import cancel_event
 
 
 class ReviewConflict(APIException):
@@ -23,7 +24,9 @@ def review_version(item):
 def review_submission(pk, reviewer, *, action, body, request_id, version=None):
     owner_id = get_object_or_404(EventSubmission.objects.only('owner_id'), pk=pk).owner_id
     # Same lock order as organizer resubmission: owner, submission, event.
-    owner = get_user_model().objects.select_for_update().get(pk=owner_id)
+    # Keep profile edits serialized, but allow FK key-share locks when the
+    # creator also buys tickets while a team decision waits for the event.
+    owner = get_user_model().objects.select_for_update(no_key=True).get(pk=owner_id)
     item = EventSubmission.objects.select_for_update().get(pk=pk)
     event = Event.objects.select_for_update().select_related('venue').get(pk=item.event_id)
     item.owner, item.event = owner, event
@@ -38,7 +41,12 @@ def review_submission(pk, reviewer, *, action, body, request_id, version=None):
         raise ValidationError({'detail': 'Yoxlama əməliyyatı düzgün deyil.'})
     if action != 'approved' and not body.strip():
         raise ValidationError({'detail': 'Şərhi yaz.'})
-    if action != 'comment':
+    if action == 'cancelled':
+        if event.status != 'published':
+            raise ReviewConflict('Yalnız yayımlanmış tədbir dayandırıla bilər.')
+        event = cancel_event(event_id=event.pk, author=reviewer, reason=body)
+        item.event, item.note = event, body
+    elif action != 'comment':
         if event.status != 'draft' or item.status != 'pending':
             raise ReviewConflict('Yalnız yoxlanılan tədbir barədə qərar verilə bilər.')
         if action == 'changes_requested':

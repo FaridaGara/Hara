@@ -35,6 +35,7 @@ from apps.users.views import (
     VerificationResendAPIView,
 )
 from events.reviews import ReviewListAPIView, ReviewDetailAPIView
+from events.notifications import NotificationInboxAPIView, NotificationCountAPIView, NotificationReadAPIView
 from events.submissions import SubmissionEligibilityAPIView, SubmissionListAPIView, SubmissionDetailAPIView, SubmissionImageAPIView
 from events.seat_plans import SeatPlanListAPIView, SeatPlanDetailAPIView
 from events.views import (
@@ -86,6 +87,9 @@ urlpatterns = [
     ),
     path("api/", include("apps.core.urls")),
     path("api/team/event-reviews/", ReviewListAPIView.as_view(), name="team-event-review-list"),
+    path('api/notifications/inbox/', NotificationInboxAPIView.as_view(), name='notification-inbox'),
+    path('api/notifications/unread-count/', NotificationCountAPIView.as_view(), name='notification-count'),
+    path('api/notifications/<int:pk>/read/', NotificationReadAPIView.as_view(), name='notification-read'),
     path("api/team/event-reviews/<uuid:pk>/", ReviewDetailAPIView.as_view(), name="team-event-review-detail"),
     path("api/event-submissions/eligibility/", SubmissionEligibilityAPIView.as_view(), name="submission-eligibility"),
     path("api/event-submissions/", SubmissionListAPIView.as_view(), name="submission-list"),

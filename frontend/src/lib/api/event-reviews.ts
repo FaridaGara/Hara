@@ -1,13 +1,14 @@
 import { apiRequest } from "./client";
 import type { EventSubmission } from "./event-submissions";
 import type { EventDraft } from "../event-draft";
-export type ReviewAction = "comment" | "changes_requested" | "approved";
+export type ReviewAction = "comment" | "changes_requested" | "approved" | "cancelled";
 export type EventReview = EventSubmission & {
   version: string; can_moderate: boolean;
   creator: { id: number; name: string; email: string; phone: string };
 };
 export type EventReviewDetail = EventReview & {
   snapshot: EventDraft;
+  refund_requests?: { id: string; order_id: string; amount: string; currency: string; status: "pending"; created_at: string }[];
   history: { id: string; action: ReviewAction; body: string; author: string; created_at: string }[];
 };
 export type ReviewRequest = { request_id: string; version: string; action: ReviewAction; body: string; reviewed: boolean };

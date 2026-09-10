@@ -1,4 +1,5 @@
 "use client";
+import { NotificationLink } from "./notifications";
 
 import Image from "next/image";
 import Link from "next/link";
@@ -178,20 +179,13 @@ export function Header() {
             </span>
           ) : null}
         </Link>
-        <button
-          type="button"
-          className="relative grid size-10 place-items-center rounded-full bg-[var(--hara-surface)] transition active:scale-95"
-          aria-label="Bildirişlər"
-        >
+        <NotificationLink>
           <AdaptiveIcon
             lightSrc="/figma/home/notification.svg"
             darkSrc="/figma/home-dark/notification.svg"
             size={24}
           />
-          <span className="absolute -top-1 -right-0.5 grid size-5 place-items-center rounded-full border border-[var(--hara-badge-border)] bg-[#ff2c3d] text-[9px] leading-3 font-medium text-white">
-            9+
-          </span>
-        </button>
+        </NotificationLink>
       </div>
     </header>
   );

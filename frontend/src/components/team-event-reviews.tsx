@@ -12,7 +12,7 @@ import { useAuth } from "./auth-provider";
 import { AuthMessage } from "./auth-ui";
 import css from "./team-event-reviews.module.css";
 
-const actions: Record<ReviewAction, string> = { comment: "Daxili şərh", changes_requested: "Düzəliş tələb edildi", approved: "Təsdiqləndi və yayımlandı" };
+const actions: Record<ReviewAction, string> = { comment: "Daxili şərh", changes_requested: "Düzəliş tələb edildi", approved: "Təsdiqləndi və yayımlandı", cancelled: "Tədbir dayandırıldı" };
 function TeamGate({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   if (!user) return <p role="status">Hesab yüklənir…</p>;
@@ -96,7 +96,7 @@ function ReviewDetails({ id }: { id: string }) {
     try {
       const data = await eventReviewsApi.act(id, payload);
       setItem(data); setBody(""); setReviewed(false); setUncertain(false); pendingRequest.current = null;
-      setNotice(payload.action === "comment" ? "Daxili şərh saxlanıldı." : payload.action === "approved" ? "Tədbir təsdiqləndi və yayımlandı." : "Düzəliş qeydi tədbiri yaradan şəxsin Tədbirlərim bölməsində görünür.");
+      setNotice(payload.action === "comment" ? "Daxili şərh saxlanıldı." : payload.action === "approved" ? "Tədbir təsdiqləndi və yayımlandı." : payload.action === "cancelled" ? "Tədbir dayandırıldı. Bilet sahiblərinə tətbiqdaxili bildiriş göndərildi. Ödənişli sifarişlər geri ödəniş üçün qeydə alındı." : "Düzəliş qeydi tədbiri yaradan şəxsin Tədbirlərim bölməsində görünür.");
     } catch (cause) {
       const unknown = !(cause instanceof ApiError) || cause.status === null || cause.status >= 500;
       setUncertain(unknown);
@@ -123,7 +123,7 @@ function ReviewDetails({ id }: { id: string }) {
       </div><aside className={css.column}>
         <section className={css.card}><h2>Yoxlama və qərar</h2>{item.note ? <p className={css.multiline}>Yaradan şəxsə son qeyd: {item.note}</p> : null}
           {item.can_moderate ? <>
-            <label className={css.comment}>Şərh və ya düzəliş səbəbi<textarea value={body} maxLength={2000} rows={5} disabled={locked} onChange={event => setBody(event.target.value)} /></label>
+            <label className={css.comment}>{item.status === "published" ? "Şərh və ya dayandırma səbəbi" : "Şərh və ya düzəliş səbəbi"}<textarea value={body} maxLength={2000} rows={5} disabled={locked} onChange={event => setBody(event.target.value)} /></label>
             <small>“Daxili şərh” yalnız komandaya görünür. “Düzəliş tələb et” qeydi tədbiri yaradan şəxsə görünür.</small>
             <button className={css.secondary} disabled={locked || !body.trim()} onClick={() => void send("comment")}>Daxili şərh əlavə et</button>
             {item.status === "pending" ? <>
@@ -131,13 +131,18 @@ function ReviewDetails({ id }: { id: string }) {
               <button className={css.primary} disabled={locked || !reviewed} onClick={() => setConfirmation("approved")}>Təsdiqlə və yayımla</button>
               <button className={css.secondary} disabled={locked || !body.trim()} onClick={() => setConfirmation("changes_requested")}>Düzəliş tələb et</button>
             </> : <p>{submissionStatuses[item.status].description}</p>}
+            {item.status === "published" ? <>
+              <p>Dayandırma səbəbi təşkilatçıya və bilet sahiblərinə görünəcək. Satış və giriş bağlanacaq.</p>
+              <button className={`${css.secondary} ${css.danger}`} disabled={locked || !body.trim()} onClick={() => setConfirmation("cancelled")}>Tədbiri dayandır</button>
+            </> : null}
             {uncertain ? <button className={css.secondary} disabled={busy || loading} onClick={() => void send(pendingRequest.current?.action || "comment", true)}>Eyni sorğunu təkrar yoxla</button> : null}
-            {confirmation ? <div role="dialog" aria-modal="false" aria-label="Qərarı təsdiqlə" className={css.confirm}><p>{confirmation === "approved" ? "Tədbir təsdiqlənəcək və iştirakçılara görünəcək." : "Bu qeyd tədbiri yaradan şəxsə göndəriləcək:"}</p>{confirmation === "changes_requested" ? <p className={css.multiline}>{body}</p> : null}<div className={css.buttons}><button className={css.primary} disabled={busy} onClick={() => void send(confirmation)}>Qərarı təsdiqlə</button><button className={css.secondary} onClick={() => setConfirmation(null)}>Geri qayıt</button></div></div> : null}
+            {confirmation ? <div role="dialog" aria-modal="false" aria-label="Qərarı təsdiqlə" className={css.confirm}><p>{confirmation === "approved" ? "Tədbir təsdiqlənəcək və iştirakçılara görünəcək." : confirmation === "cancelled" ? "Tədbir ləğv ediləcək və bütün biletlər etibarsız olacaq. Ödənişsiz bilet sahiblərinə ləğv, ödənişli sifariş sahiblərinə geri ödənişin gözlənildiyi barədə bildiriş göndəriləcək. Pul avtomatik qaytarılmır; geri ödənişləri komanda ayrıca emal etməlidir. Bu əməliyyat geri alınmır." : "Bu qeyd tədbiri yaradan şəxsə göndəriləcək:"}</p>{confirmation !== "approved" ? <p className={css.multiline}>{body}</p> : null}<div className={css.buttons}><button className={css.primary} disabled={locked || (confirmation !== "approved" && !body.trim())} onClick={() => void send(confirmation)}>Qərarı təsdiqlə</button><button className={css.secondary} onClick={() => setConfirmation(null)}>Geri qayıt</button></div></div> : null}
           </> : <p>Baxış icazən var. Şərh və qərar üçün administrator dəyişiklik icazəsi verməlidir.</p>}
           {busy ? <p role="status">Saxlanılır…</p> : null}
           {item.status === "published" ? <Link className={css.secondary} href={`/events/${item.event_slug}`}>Yayımlanmış tədbirə bax</Link> : null}
         </section>
-        <section className={css.card}><h2>Yoxlama tarixçəsi</h2><p>Şərhlər və qərarlar müəllif və tarixlə saxlanılır.</p>{!item.history.length ? <p>Hələ qeyd yoxdur.</p> : <ol className={css.history}>{item.history.map(log => <li key={log.id}><strong>{actions[log.action]}</strong><span>{log.author} · {submissionTime(log.created_at)}</span>{log.body ? <p className={css.multiline}>{log.body}</p> : null}<small>{log.action === "changes_requested" ? "Yaradan şəxsə göstərilir" : "Komanda qeydi"}</small></li>)}</ol>}</section>
+        {item.status === "cancelled" ? <section className={css.card}><h2>Geri ödəniş sorğuları</h2><p>{item.refund_requests?.length || 0} sifariş emal gözləyir. Bu qeyd pulun qaytarıldığı demək deyil.</p>{item.refund_requests?.map(refund => <div key={refund.id}><strong>{refund.amount} {refund.currency} · Gözlənilir</strong><p>Sifariş: {refund.order_id}</p><small>{submissionTime(refund.created_at)}</small></div>)}</section> : null}
+        <section className={css.card}><h2>Yoxlama tarixçəsi</h2><p>Şərhlər və qərarlar müəllif və tarixlə saxlanılır.</p>{!item.history.length ? <p>Hələ qeyd yoxdur.</p> : <ol className={css.history}>{item.history.map(log => <li key={log.id}><strong>{actions[log.action]}</strong><span>{log.author} · {submissionTime(log.created_at)}</span>{log.body ? <p className={css.multiline}>{log.body}</p> : null}<small>{log.action === "cancelled" ? "Təşkilatçıya və bilet sahiblərinə göstərilir" : log.action === "changes_requested" ? "Yaradan şəxsə göstərilir" : "Komanda qeydi"}</small></li>)}</ol>}</section>
       </aside></div>
     </> : null}
   </main>;

@@ -4,6 +4,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from ticketing.models import Order, Ticket
+from events.models import Event
 
 
 class TicketCheckInNotFound(Exception):
@@ -34,6 +35,9 @@ def ticket_check_in_queryset():
 
 @transaction.atomic
 def check_in_ticket(*, event, qr_code, organizer):
+    event = Event.objects.select_for_update().get(pk=event.pk)
+    if event.status == Event.Status.CANCELLED:
+        raise TicketCheckInConflict('Tədbir ləğv edilib. Biletlər etibarsızdır.')
     ticket = (
         ticket_check_in_queryset()
         .select_for_update(of=("self",))
