@@ -49,6 +49,49 @@ class SubmissionTests(APITestCase):
         self.assertEqual(self.client.get(f'{self.url}images/0/').status_code, 404)
         self.assertEqual(self.client.get(self.url).data['snapshot']['media'], self.data['media'])
 
+    def test_legacy_music_draft_resolves_to_live_catalog_without_duplicates(self):
+        Category.objects.filter(slug='musiqi').update(slug='music', name='Music')
+        response = self.send(); self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data['snapshot']['category'], 'music')
+        self.assertEqual(response.data['snapshot']['categoryLabel'], 'Music')
+        self.assertEqual(Event.objects.get().category.slug, 'music')
+        self.assertEqual(self.send().status_code, 200)
+        self.assertEqual(Category.objects.count(), 1)
+
+    def test_category_catalog_is_public_and_contains_only_active_options(self):
+        Category.objects.filter(slug='musiqi').update(slug='music', name='Music')
+        Category.objects.create(slug='tech', name='Technology')
+        Category.objects.create(slug='old', name='Inactive', is_active=False)
+        self.client.force_authenticate(None)
+        response = self.client.get('/api/categories/'); self.assertEqual(response.status_code, 200)
+        by_slug = {item['slug']: item for item in response.data}
+        self.assertEqual(set(by_slug), {'music', 'tech'})
+        self.assertEqual(by_slug['music']['legacy_slugs'], ['musiqi'])
+        Category.objects.create(slug='musiqi', name='Disabled legacy', is_active=False)
+        response = self.client.get('/api/categories/')
+        self.assertEqual(next(item for item in response.data if item['slug'] == 'music')['legacy_slugs'], [])
+
+    def test_inactive_or_missing_category_returns_actionable_error(self):
+        Category.objects.filter(slug='musiqi').update(is_active=False)
+        Category.objects.create(slug='music', name='Music')
+        for category in ['musiqi', 'missing', ['music']]:
+            self.data['category'] = category
+            response = self.send(); self.assertEqual(response.status_code, 400, response.data)
+            self.assertEqual(response.data['code'], 'CATEGORY_UNAVAILABLE')
+        self.assertEqual(EventSubmission.objects.count(), 0)
+        self.assertEqual(Event.objects.count(), 0)
+
+    def test_status_list_includes_submission_time_moderator_note_and_live_status(self):
+        self.send(); item = EventSubmission.objects.get()
+        item.status = 'changes_requested'; item.note = 'Məkan ünvanını dəqiqləşdir'; item.save()
+        response = self.client.get('/api/event-submissions/').json()[0]
+        self.assertEqual(response['status'], 'changes_requested')
+        self.assertEqual(response['note'], item.note)
+        self.assertTrue(response['submitted_at']); self.assertTrue(response['updated_at'])
+        self.assertNotIn('snapshot', response)
+        item.event.status = 'published'; item.event.save()
+        self.assertEqual(self.client.get('/api/event-submissions/').data[0]['status'], 'published')
+
     def test_authentication_and_cross_owner_read_write(self):
         self.send(); self.client.force_authenticate(self.other)
         self.assertEqual(self.client.get(self.url).status_code, 404)

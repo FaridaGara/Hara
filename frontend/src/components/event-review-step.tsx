@@ -8,6 +8,7 @@ import { EVENT_CATEGORIES, EVENT_LANGUAGES, type EventDraft } from "@/lib/event-
 import { formatWizardDate } from "@/lib/event-schedule";
 import { allocatedTickets, salesCapacity, salesSummary } from "@/lib/event-sales";
 import { reviewIssues, submissionDraft } from "@/lib/event-review";
+import { submissionTime } from "@/lib/submission-status";
 import { ApiError } from "@/lib/api/client";
 import { eventSubmissionsApi, type EventSubmission, type SubmissionEligibility } from "@/lib/api/event-submissions";
 import { AuthMessage } from "./auth-ui";
@@ -25,7 +26,7 @@ function Preview({ draft }: { draft: EventDraft }) {
   return <>
     <p className={styles.accent}>İştirakçı önbaxışı · alış aktiv deyil</p>
     {draft.media?.cover ? <Image unoptimized src={draft.media.cover} alt={draft.title} width={370} height={208} className={styles.reviewCover} /> : <AuthMessage>Üz qabığı əlavə edilməyib.</AuthMessage>}
-    <div className={styles.introduction}><h1>{draft.title}</h1><p>{EVENT_CATEGORIES.find(([id]) => id === draft.category)?.[1]}</p></div>
+    <div className={styles.introduction}><h1>{draft.title}</h1><p>{draft.categoryLabel || EVENT_CATEGORIES.find(([id]) => id === draft.category)?.[1] || draft.category}</p></div>
     <dl className={styles.reviewDetails}>
       <div><dt>Tarix · Bakı vaxtı (UTC+4)</dt><dd>{formatWizardDate(draft.schedule.startDate)} · {draft.schedule.startTime}–{draft.schedule.endTime}{draft.schedule.endDate !== draft.schedule.startDate ? ` · ${formatWizardDate(draft.schedule.endDate)}` : ""}</dd></div>
       <div><dt>Məkan</dt><dd>{venue?.name}<br />{venue?.address}{venue?.entry_note ? <><br />{venue.entry_note}</> : null}</dd></div>
@@ -52,6 +53,7 @@ export function EventReviewStep({ draft, replaceDraft, save, notice, storageErro
   const [checking, setChecking] = useState(true);
   const [unknown, setUnknown] = useState(false);
   const [error, setError] = useState("");
+  const [categoryError, setCategoryError] = useState(false);
   const [checkedAt, setCheckedAt] = useState(() => Date.now());
   const [refresh, setRefresh] = useState(0);
   const inFlight = useRef(false);
@@ -90,10 +92,11 @@ export function EventReviewStep({ draft, replaceDraft, save, notice, storageErro
     inFlight.current = true;
     replaceDraft({ ...draft, submissionId: id, lastStep: 5 });
     if (!save(false)) { replaceDraft(draft); inFlight.current = false; setError("Sorğunu bərpa etmək üçün qaralama saxlanmalıdır. Yenidən cəhd et."); return; }
-    setBusy(true); setError("");
+    setBusy(true); setError(""); setCategoryError(false);
     try { setSubmission(await eventSubmissionsApi.submit(id, snapshot)); setView("review"); setUnknown(false); }
     catch (cause) {
       const uncertain = !(cause instanceof ApiError) || cause.status === null || cause.status >= 500 || cause.status === 409;
+      setCategoryError(cause instanceof ApiError && Boolean(cause.payload && typeof cause.payload === "object" && "code" in cause.payload && cause.payload.code === "CATEGORY_UNAVAILABLE"));
       setUnknown(uncertain);
       setError(uncertain ? "Göndərilmə təsdiqi gözlənilir. Yenidən göndərməzdən əvvəl statusu yoxla." : cause.message);
       setView("review");
@@ -115,9 +118,11 @@ export function EventReviewStep({ draft, replaceDraft, save, notice, storageErro
       <div className={styles.content}>
         {view === "preview" ? <Preview draft={previewDraft} /> : <>
           <WizardProgress step={5} />
-          {locked ? <div className={styles.reviewStatus} role="status"><h1>{statusTitles[submission!.status]}</h1><p>{submission!.status === "pending" ? "Tədbirin HARA komandasına göndərildi. Təsdiqlənənədək axtarışda və bilet satışında görünməyəcək." : submission!.status === "published" ? "Tədbir artıq iştirakçılara görünür." : "Tədbirin son statusu serverdən alındı."}</p>
+          {locked ? <div className={styles.reviewStatus} role="status"><h1>{statusTitles[submission!.status]}</h1><p>{submission!.status === "pending" ? "Tədbirin uğurla HARA komandasına göndərildi. Status: Yoxlanılır. Cavabı Daha çox → Tədbirlərim bölməsindən izləyə bilərsən. Təsdiqlənənədək tədbir iştirakçılara görünməyəcək." : submission!.status === "published" ? "Tədbir artıq iştirakçılara görünür." : "Tədbirin son statusu serverdən alındı."}</p>
+            {submission!.submitted_at ? <p>Göndərildi: {submissionTime(submission!.submitted_at)} · Bakı vaxtı</p> : null}
+            {submission!.note ? <p>Moderatorun qeydi: {submission!.note}</p> : null}
             {submission!.status === "published" && submission!.sales_start_at && Date.parse(submission!.sales_start_at) > checkedAt ? <p>Satış {new Intl.DateTimeFormat("az-AZ", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Baku" }).format(new Date(submission!.sales_start_at))} tarixində açılacaq · Bakı vaxtı.</p> : null}
-          </div> : view === "confirm" ? <div className={styles.reviewStatus}><h1>Yoxlamaya göndərək?</h1><p>Məlumatları yoxladığını təsdiqlə. Göndərildikdən sonra HARA komandasının cavabını burada görə biləcəksən.</p></div> : <>
+          </div> : view === "confirm" ? <div className={styles.reviewStatus}><h1>Yoxlamaya göndərək?</h1><p>Məlumatları yoxladığını təsdiqlə. Göndərildikdən sonra HARA komandasının cavabını Tədbirlərim bölməsində görə biləcəksən.</p></div> : <>
             <div className={`${styles.introduction} ${styles.reviewIntro}`}><h1>Yoxla və yayımla</h1><p>Son dəfə nəzərdən keçir. İstənilən bölməni dəyişə bilərsən.</p></div>
             {submission?.status === "changes_requested" ? <AuthMessage>Düzəliş tələb olunur: {submission.note}</AuthMessage> : null}
             {rows.map(row => <div key={row.step}><button disabled={frozen} aria-label={`${row.title}: ${row.summary}. Düzəliş et`} className={styles.reviewRow} onClick={() => onEdit(row.step)}><span className={styles.ticketIcon}><WizardIcon name={row.icon} /></span><span><strong>{row.title}</strong><small>{row.summary}</small></span><WizardIcon name="forward" /></button>{row.step === 2 ? <p className={styles.hint}>{draft.schedule.venue?.name} · Bakı vaxtı</p> : null}</div>)}
@@ -129,7 +134,7 @@ export function EventReviewStep({ draft, replaceDraft, save, notice, storageErro
           {locked || view === "confirm" ? <button disabled={busy} className={styles.reviewPreview} onClick={() => setView("preview")}>İştirakçı kimi önbaxış <WizardIcon name="forward" /></button> : null}
         </>}
         {busy ? <p role="status">Tədbir göndərilir…</p> : checking ? <p role="status">Status yoxlanılır…</p> : null}
-        {error ? <AuthMessage>{error}</AuthMessage> : null}
+        {error ? <AuthMessage>{error}{categoryError ? <> <button className={styles.retry} onClick={() => onEdit(1)}>Kateqoriyanı yenidən seç</button></> : null}</AuthMessage> : null}
         {storageError ? <AuthMessage>Qaralama saxlanılmadı. <button className={styles.retry} onClick={() => save()}>Yenidən cəhd et</button></AuthMessage> : notice ? <AuthMessage tone="success">{notice}</AuthMessage> : null}
       </div>
       <footer className={styles.footer}>

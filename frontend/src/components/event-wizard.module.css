@@ -197,3 +197,13 @@
 .reviewStatus p { font-size: 15px; line-height: 22px; color: var(--hara-auth-secondary); }
 .reviewIssue { color: #de2637; font-size: 14px; line-height: 20px; padding: 12px; border: 1px solid currentColor; border-radius: 12px; display: flex; flex-direction: column; gap: 8px; }
 .reviewIssue button { align-self: flex-start; text-decoration: underline; font-weight: 600; cursor: pointer; }
+
+.submissionList { display: flex; flex-direction: column; gap: 16px; }
+.submissionCard { display: flex; flex-direction: column; gap: 16px; padding: 20px 16px; border: 1px solid var(--hara-auth-muted); border-radius: 20px; }
+.submissionHeading { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.submissionHeading h2 { font-size: 18px; font-weight: 600; line-height: 25px; overflow-wrap: anywhere; }
+.submissionCard > p { font-size: 14px; line-height: 21px; color: var(--hara-auth-secondary); }
+.submissionBadge { padding: 6px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; background: var(--hara-auth-field); }
+.submissionBadge[data-status="pending"] { background: #fff0c2; color: #755100; }
+.submissionBadge[data-status="published"] { background: #d7f6e5; color: #155336; }
+.submissionBadge[data-status="changes_requested"] { background: #ffe4d1; color: #853600; }

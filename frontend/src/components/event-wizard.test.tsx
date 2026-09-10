@@ -1,7 +1,9 @@
+import { eventsApi } from "@/lib/api/events";
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { EMPTY_EVENT_DRAFT, readEventDraft, saveEventDraft } from "@/lib/event-draft";
 import { EventDetailsStep } from "./event-wizard";
 
 const profile = {
@@ -11,9 +13,33 @@ const profile = {
   role: "user" as const, providers: [], is_email_verified: true,
 };
 
-beforeEach(() => window.localStorage.clear());
+beforeEach(() => { window.localStorage.clear(); vi.spyOn(eventsApi, "categories").mockResolvedValue([{ id: 1, name: "Musiqi", slug: "musiqi" }]); });
 
 describe("event details draft", () => {
+  it("uses live category slugs, resolves saved music aliases and restores new catalog choices", async () => {
+    vi.mocked(eventsApi.categories).mockResolvedValue([{ id: 1, name: "Music", slug: "music", legacy_slugs: ["musiqi"] }, { id: 2, name: "Texnologiya", slug: "texnologiya" }]);
+    saveEventDraft(profile.id, { ...structuredClone(EMPTY_EVENT_DRAFT), title: "Caz", description: "Canlı musiqi", category: "musiqi" });
+    const view = render(<EventDetailsStep user={profile} onNext={vi.fn()} />);
+    await screen.findByRole("option", { name: "Music" });
+    expect((screen.getByLabelText("Kateqoriya") as HTMLSelectElement).value).toBe("music");
+    expect((screen.getByRole("button", { name: "Növbəti addım" }) as HTMLButtonElement).disabled).toBe(false);
+    await userEvent.selectOptions(screen.getByLabelText("Kateqoriya"), "texnologiya");
+    view.unmount(); render(<EventDetailsStep user={profile} onNext={vi.fn()} />);
+    await screen.findByRole("option", { name: "Texnologiya" });
+    expect(readEventDraft(profile.id).category).toBe("texnologiya");
+    expect((screen.getByLabelText("Kateqoriya") as HTMLSelectElement).value).toBe("texnologiya");
+  });
+  it("blocks unavailable categories and recovers a failed catalog request", async () => {
+    vi.mocked(eventsApi.categories).mockRejectedValueOnce(new Error("offline"));
+    saveEventDraft(profile.id, { ...structuredClone(EMPTY_EVENT_DRAFT), title: "Caz", description: "Canlı musiqi", category: "removed" });
+    render(<EventDetailsStep user={profile} onNext={vi.fn()} />);
+    await screen.findByText(/Kateqoriyalar yüklənmədi/);
+    expect((screen.getByRole("button", { name: "Növbəti addım" }) as HTMLButtonElement).disabled).toBe(true);
+    await userEvent.click(screen.getByRole("button", { name: "Kateqoriyaları yenilə" }));
+    await screen.findByText(/Əvvəlki kateqoriya mövcud deyil/);
+    await userEvent.selectOptions(screen.getByLabelText("Kateqoriya"), "musiqi");
+    expect((screen.getByRole("button", { name: "Növbəti addım" }) as HTMLButtonElement).disabled).toBe(false);
+  });
   it("starts empty and restores only the current account's draft after reopening", async () => {
     const view = render(<EventDetailsStep user={profile} />);
     const input = screen.getByLabelText("Tədbirin adı") as HTMLInputElement;

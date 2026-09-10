@@ -59,6 +59,7 @@ export type EventMediaDraft = { cover: string; gallery: string[] };
 export type EventDraft = {
   title: string;
   category: string;
+  categoryLabel?: string;
   description: string;
   age: string;
   language: string;
@@ -125,7 +126,8 @@ export function readEventDraft(userId: number): EventDraft {
     const text = (key: string, max: number) => typeof draft[key] === "string" ? draft[key].slice(0, max) : "";
     return {
       title: text("title", 255),
-      category: EVENT_CATEGORIES.some(([id]) => id === draft.category) ? String(draft.category) : "",
+      category: typeof draft.category === "string" && /^[a-zA-Z0-9_-]{1,120}$/.test(draft.category) ? draft.category : "",
+      categoryLabel: text("categoryLabel", 100),
       description: text("description", 1000),
       age: EVENT_AGES.some((age) => age === draft.age) ? String(draft.age) : "",
       language: EVENT_LANGUAGES.some(([id]) => id === draft.language) ? String(draft.language) : "",
@@ -152,7 +154,7 @@ export function saveEventDraft(userId: number, draft: EventDraft): boolean {
 export function isEventDraftComplete(draft: EventDraft) {
   return Boolean(
     draft.title.trim() && draft.title.length <= 255 &&
-    EVENT_CATEGORIES.some(([id]) => id === draft.category) &&
+    /^[a-zA-Z0-9_-]{1,120}$/.test(draft.category) &&
     draft.description.trim() && draft.description.length <= 1000 &&
     (!draft.duration || (/^\d{1,5}$/.test(draft.duration) && Number(draft.duration) > 0)),
   );

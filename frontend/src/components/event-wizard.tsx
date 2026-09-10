@@ -3,9 +3,10 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 
+import { eventsApi } from "@/lib/api/events";
 import type { UserProfile } from "@/lib/api";
 import {
-  EVENT_AGES, EVENT_CATEGORIES, EVENT_LANGUAGES,
+  EVENT_AGES, EVENT_LANGUAGES,
   isEventDraftComplete, type EventDraft, type WizardStep,
 } from "@/lib/event-draft";
 import { isScheduleComplete, suggestedEnd } from "@/lib/event-schedule";
@@ -50,6 +51,19 @@ function EventDetailsForm({ user, onNext, draft, replaceDraft, save, notice, sto
   reviewEdit?: boolean; onCancel?: () => void;
 } & ReturnType<typeof useEventDraft>) {
 
+  const [categories, setCategories] = useState<Awaited<ReturnType<typeof eventsApi.categories>>>([]);
+  const [categoryError, setCategoryError] = useState("");
+  const [categoryRetry, setCategoryRetry] = useState(0);
+  useEffect(() => {
+    const controller = new AbortController();
+    eventsApi.categories(controller.signal).then(data => {
+      if (!controller.signal.aborted) { setCategories(data); setCategoryError(data.length ? "" : "Hazırda aktiv kateqoriya yoxdur."); }
+    }).catch(() => { if (!controller.signal.aborted) setCategoryError("Kateqoriyalar yüklənmədi. Yenidən cəhd et."); });
+    return () => controller.abort();
+  }, [categoryRetry]);
+  const selectedCategory = categories.find(item => item.slug === draft.category || item.legacy_slugs?.includes(draft.category));
+  const detailsComplete = isEventDraftComplete(draft) && Boolean(selectedCategory) && !categoryError;
+
   function update<K extends keyof EventDraft>(key: K, value: EventDraft[K]) {
     const nextDraft = { ...draft, [key]: value };
     if (key === "duration" && !draft.schedule.endEdited) {
@@ -61,7 +75,7 @@ function EventDetailsForm({ user, onNext, draft, replaceDraft, save, notice, sto
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!onNext || !isEventDraftComplete(draft)) return;
+    if (!onNext || !detailsComplete) return;
     save();
     onNext(draft);
   }
@@ -83,9 +97,11 @@ function EventDetailsForm({ user, onNext, draft, replaceDraft, save, notice, sto
                 <span>Tədbirin adı *</span>
                 <input aria-label="Tədbirin adı" name="title" required maxLength={255} placeholder="Bakı Caz Gecəsi 2026" value={draft.title} onChange={(event) => update("title", event.target.value)} />
               </label>
-              <SelectField label="Kateqoriya" required value={draft.category} onChange={(value) => update("category", value)}>
-                {EVENT_CATEGORIES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+              <SelectField label="Kateqoriya" required value={selectedCategory?.slug || draft.category} onChange={(value) => replaceDraft({ ...draft, category: value, categoryLabel: categories.find(item => item.slug === value)?.name || "" })}>
+                {draft.category && !selectedCategory ? <option value={draft.category} disabled>{draft.categoryLabel || draft.category} — seçimi yoxla</option> : null}
+                {categories.map(item => <option key={item.id} value={item.slug}>{item.name}</option>)}
               </SelectField>
+              {categoryError ? <AuthMessage>{categoryError} <button type="button" className={styles.retry} onClick={() => setCategoryRetry(value => value + 1)}>Kateqoriyaları yenilə</button></AuthMessage> : !categories.length ? <p role="status">Kateqoriyalar yüklənir…</p> : draft.category && !selectedCategory ? <AuthMessage>Əvvəlki kateqoriya mövcud deyil. Siyahıdan yenidən seç.</AuthMessage> : null}
               <div className={styles.description}>
                 <label className={`${styles.field} ${styles.textarea}`}>
                   <span>Tədbir haqqında *</span>
@@ -114,7 +130,7 @@ function EventDetailsForm({ user, onNext, draft, replaceDraft, save, notice, sto
             {notice ? <AuthMessage tone="success">{notice}</AuthMessage> : null}
           </div>
           <footer className={styles.footer}>
-            <button type="submit" className={styles.next} disabled={!onNext || !isEventDraftComplete(draft)} aria-describedby="event-next-step">
+            <button type="submit" className={styles.next} disabled={!onNext || !detailsComplete} aria-describedby="event-next-step">
               {reviewEdit ? "Dəyişiklikləri tətbiq et" : "Növbəti addım"} <WizardIcon name="next" className={styles.nextIcon} />
             </button>
             <p id="event-next-step">{reviewEdit ? "Yekun yoxlamaya qayıdacaqsan" : "Növbəti: Tarix və məkan"}</p>

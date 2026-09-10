@@ -24,7 +24,8 @@ from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
-from .models import Category, Event, EventPhoto, EventSubmission, Venue, VenuePlan, VenueSection, VenueSeat
+from .models import Event, EventPhoto, EventSubmission, Venue, VenuePlan, VenueSection, VenueSeat
+from .categories import resolve_category
 from .seat_plans import number, text, validate_layout
 from ticketing.models import TicketType
 
@@ -106,8 +107,11 @@ def validate_snapshot(value):
         invalid('Yaş və ya dil seçimi düzgün deyil.')
     if data.get('duration') and (not isinstance(data['duration'], str) or not re.fullmatch(r'\d{1,5}', data['duration']) or int(data['duration']) < 1):
         invalid('Müddət düzgün deyil.')
-    category = Category.objects.filter(slug=data.get('category'), is_active=True).first()
-    if not category: invalid('Kateqoriya tapılmadı.')
+    category = resolve_category(data.get('category'))
+    if not category:
+        raise serializers.ValidationError({'detail': 'Bu kateqoriya artıq mövcud deyil. Əsas məlumatlarda siyahıdan yenidən seç.', 'code': 'CATEGORY_UNAVAILABLE'})
+    data['category'] = category.slug
+    data['categoryLabel'] = category.name
     schedule, sales, media = (data.get(key) for key in ('schedule', 'sales', 'media'))
     if not all(isinstance(part, dict) for part in (schedule, sales, media)): invalid('Məlumatları tamamla.')
     start = moment(schedule.get('startDate'), schedule.get('startTime'))
@@ -216,6 +220,7 @@ def materialize_event(request, pk, validated, existing=None):
 def output(item, detail=False):
     public_status = item.event.status
     result = {'id': str(item.pk), 'title': item.event.title, 'status': public_status if public_status != 'draft' else item.status, 'note': item.note, 'event_slug': item.event.slug, 'sales_start_at': item.event.ticket_types.order_by('sales_start_at').values_list('sales_start_at', flat=True).first()}
+    result.update(submitted_at=item.created_at, updated_at=max(item.updated_at, item.event.updated_at))
     if detail: result['snapshot'] = item.snapshot
     return result
 
