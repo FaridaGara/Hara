@@ -1,7 +1,7 @@
+import uuid
 from django import forms
 from django.contrib import admin
 from django.core.exceptions import ValidationError
-from django.db import transaction
 from rest_framework.exceptions import ValidationError as APIValidationError
 from django.contrib.gis.admin import GISModelAdmin
 
@@ -10,6 +10,7 @@ from .models import (
     Event,
     EventPhoto,
     EventSubmission,
+    SubmissionReviewLog,
     Favorite,
     Notification,
     OrganizerFollow,
@@ -18,7 +19,7 @@ from .models import (
     VenueSeat,
     VenueSection,
 )
-from .submissions import validate_snapshot, eligibility, is_free_event
+from .review_service import review_submission, ReviewConflict
 
 
 @admin.register(Category)
@@ -187,27 +188,19 @@ class EventSubmissionAdmin(admin.ModelAdmin):
     def has_add_permission(self, request): return False
     def has_delete_permission(self, request, obj=None): return False
 
-    @admin.action(description='Yoxlamanı təsdiqlə və yayımla')
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        if change and ('note' in form.changed_data or 'status' in form.changed_data):
+            SubmissionReviewLog.objects.create(submission=obj, author=request.user,
+                action='changes_requested' if obj.status == 'changes_requested' else 'comment', body=obj.note)
+
+    @admin.action(description='Yoxlamanı təsdiqlə və yayımla', permissions=['change'])
     def approve_and_publish(self, request, queryset):
         for pk in queryset.values_list('pk', flat=True):
             try:
-                with transaction.atomic():
-                    item = EventSubmission.objects.select_for_update().select_related('owner', 'event__venue').get(pk=pk)
-                    event = Event.objects.select_for_update().get(pk=item.event_id)
-                    if event.status != 'draft' or item.status != 'pending':
-                        raise ValidationError('Yalnız yoxlanılan qaralama yayımlana bilər.')
-                    gate = eligibility(item.owner, free_event=is_free_event(item.snapshot) and not event.ticket_types.exclude(price=0).exists())
-                    if not gate['eligible']: raise ValidationError(gate['detail'])
-                    validate_snapshot(item.snapshot)
-                    if event.venue_plan_id:
-                        VenuePlan.objects.filter(pk=event.venue_plan_id).update(status='published')
-                    event.venue.is_active = True
-                    event.venue.save(update_fields=['is_active'])
-                    event.status = 'published'
-                    event.full_clean()
-                    event.save(update_fields=['status', 'published_at', 'updated_at'])
-                    self.log_change(request, item, 'Tədbir moderasiyadan sonra yayımlandı.')
-            except (ValidationError, APIValidationError) as error:
+                item = review_submission(pk, request.user, action='approved', body='', request_id=uuid.uuid4())
+                self.log_change(request, item, 'Tədbir moderasiyadan sonra yayımlandı.')
+            except (ValidationError, APIValidationError, ReviewConflict) as error:
                 self.message_user(request, f'{pk}: {error}', level='ERROR')
             else:
-                self.message_user(request, f'{event.title}: yayımlandı.')
+                self.message_user(request, f'{item.event.title}: yayımlandı.')

@@ -232,7 +232,7 @@ export function MoreView() {
           </div>
         </section>
 
-        <MenuSection title="Hesab" items={ACCOUNT_ITEMS} onAppearance={() => setAppearanceOpen(true)} onLogout={handleLogout} onNavigate={router.push} />
+        <MenuSection title="Hesab" items={user?.can_review_events ? [...ACCOUNT_ITEMS, { label: "Tədbir yoxlaması", icon: "/figma/create-event/review-document.svg", href: "/team/event-reviews" }] : ACCOUNT_ITEMS} onAppearance={() => setAppearanceOpen(true)} onLogout={handleLogout} onNavigate={router.push} />
         <MenuSection title="Tətbiq" items={APP_ITEMS} onAppearance={() => setAppearanceOpen(true)} onLogout={handleLogout} onNavigate={router.push} />
         <MenuSection title="Dəstək" items={SUPPORT_ITEMS} onAppearance={() => setAppearanceOpen(true)} onLogout={handleLogout} onNavigate={router.push} />
         <MenuSection items={ACCOUNT_ACTIONS} onAppearance={() => setAppearanceOpen(true)} onLogout={handleLogout} onNavigate={router.push} />
