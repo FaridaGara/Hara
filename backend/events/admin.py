@@ -18,7 +18,7 @@ from .models import (
     VenueSeat,
     VenueSection,
 )
-from .submissions import validate_snapshot, eligibility
+from .submissions import validate_snapshot, eligibility, is_free_event
 
 
 @admin.register(Category)
@@ -196,7 +196,7 @@ class EventSubmissionAdmin(admin.ModelAdmin):
                     event = Event.objects.select_for_update().get(pk=item.event_id)
                     if event.status != 'draft' or item.status != 'pending':
                         raise ValidationError('Yalnız yoxlanılan qaralama yayımlana bilər.')
-                    gate = eligibility(item.owner)
+                    gate = eligibility(item.owner, free_event=is_free_event(item.snapshot) and not event.ticket_types.exclude(price=0).exists())
                     if not gate['eligible']: raise ValidationError(gate['detail'])
                     validate_snapshot(item.snapshot)
                     if event.venue_plan_id:

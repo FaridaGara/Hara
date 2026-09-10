@@ -8,7 +8,7 @@ export type EventSubmission = {
 };
 export type SubmissionEligibility = { eligible: boolean; detail: string };
 export const eventSubmissionsApi = {
-  eligibility(signal?: AbortSignal) { return apiRequest<SubmissionEligibility>("/api/event-submissions/eligibility/", { auth: "required", signal }); },
+  eligibility(signal?: AbortSignal, freeEvent = false) { return apiRequest<SubmissionEligibility>(`/api/event-submissions/eligibility/${freeEvent ? "?payment_type=free" : ""}`, { auth: "required", signal }); },
   list() { return apiRequest<EventSubmission[]>("/api/event-submissions/", { auth: "required" }); },
   get(id: string, signal?: AbortSignal) { return apiRequest<EventSubmission>(`/api/event-submissions/${id}/`, { auth: "required", signal }); },
   submit(id: string, snapshot: EventDraft) { return apiRequest<EventSubmission>(`/api/event-submissions/${id}/`, { auth: "required", method: "PUT", body: { snapshot }, timeoutMs: 30_000 }); },

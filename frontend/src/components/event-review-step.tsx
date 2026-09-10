@@ -55,6 +55,7 @@ export function EventReviewStep({ draft, replaceDraft, save, notice, storageErro
   const [checkedAt, setCheckedAt] = useState(() => Date.now());
   const [refresh, setRefresh] = useState(0);
   const inFlight = useRef(false);
+  const freeEvent = draft.sales.tickets.length > 0 && draft.sales.tickets.every(ticket => ticket.paymentType === "free");
   const issues = reviewIssues(draft, checkedAt);
   const locked = Boolean(submission && submission.status !== "changes_requested");
 
@@ -64,7 +65,7 @@ export function EventReviewStep({ draft, replaceDraft, save, notice, storageErro
     async function read() {
       try {
         const [eligible, current] = await Promise.all([
-          eventSubmissionsApi.eligibility(controller.signal),
+          eventSubmissionsApi.eligibility(controller.signal, freeEvent),
           draft.submissionId ? eventSubmissionsApi.get(draft.submissionId, controller.signal).catch(cause => { if (cause instanceof ApiError && cause.status === 404) return null; throw cause; }) : Promise.resolve(null),
         ]);
         if (controller.signal.aborted) return;
@@ -76,7 +77,7 @@ export function EventReviewStep({ draft, replaceDraft, save, notice, storageErro
     }
     void read();
     return () => controller.abort();
-  }, [draft.submissionId, refresh]);
+  }, [draft.submissionId, refresh, freeEvent]);
 
   function retryStatus() { if (busy) return; setChecking(true); setRefresh(value => value + 1); }
   async function submit() {
@@ -123,7 +124,7 @@ export function EventReviewStep({ draft, replaceDraft, save, notice, storageErro
             {issues.map((issue, index) => <div key={index} className={styles.reviewIssue}><p>{issue.message}</p><button disabled={frozen} onClick={() => onEdit(issue.step)}>Düzəliş et</button></div>)}
             <button className={styles.reviewPreview} onClick={() => setView("preview")}>İştirakçı kimi önbaxış <WizardIcon name="forward" /></button>
             <div className={styles.reviewNotice}><strong>Əvvəlcə HARA yoxlayacaq</strong><p>Göndərdikdən sonra statusu izləyə biləcəksən. Təsdiqlənənədək tədbir axtarışda və bilet satışında görünməyəcək.</p></div>
-            {eligibility ? <div className={styles.reviewNotice}><strong>{eligibility.eligible ? "Təşkilatçı hesabı hazırdır" : "Təşkilatçı məlumatlarını yoxla"}</strong><p>{eligibility.detail}</p>{!eligibility.eligible ? <Link className={styles.retry} href="/personal-info?edit=1">Profilə keç</Link> : null}</div> : null}
+            {eligibility ? <div className={styles.reviewNotice}><strong>{eligibility.eligible ? "Hesab göndərməyə hazırdır" : "Hesab məlumatlarını yoxla"}</strong><p>{eligibility.detail}</p>{!eligibility.eligible ? <Link className={styles.retry} href="/personal-info?edit=1">Profilə keç</Link> : null}</div> : null}
           </>}
           {locked || view === "confirm" ? <button disabled={busy} className={styles.reviewPreview} onClick={() => setView("preview")}>İştirakçı kimi önbaxış <WizardIcon name="forward" /></button> : null}
         </>}
