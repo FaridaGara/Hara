@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useState } from "react";
 
@@ -76,6 +77,7 @@ export function ResetPasswordForm() {
           disabled={submitting}
         />
         <AuthField
+          error={passwordConfirm && password !== passwordConfirm ? "Şifrələr eyni deyil." : null}
           label="Şifrəni təkrarla"
           icon="eye"
           type="password"
@@ -89,6 +91,7 @@ export function ResetPasswordForm() {
         <PasswordRequirements password={password} />
         {!token ? <AuthMessage>Bərpa keçidi tapılmadı. Yenidən kod tələb edin.</AuthMessage> : null}
         {error ? <AuthMessage>{error}</AuthMessage> : null}
+        {!token || error ? <Link href="/forgot-password" className="text-center font-semibold text-[#4e55c5]">Yeni kod al</Link> : null}
         {retry.remaining > 0 ? (
           <p role="status" className="text-sm text-[var(--hara-auth-secondary)]">
             Yenidən cəhd üçün {retry.remaining} saniyə gözləyin.

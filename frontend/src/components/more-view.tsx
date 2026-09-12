@@ -153,7 +153,7 @@ export function MoreView() {
     "https://lh3.googleusercontent.com/",
   )
     ? user.avatar_url
-    : "/figma/more/avatar.png";
+    : "/figma/home/hara-logo-32.svg";
 
   const handleLogout = () => {
     logout();

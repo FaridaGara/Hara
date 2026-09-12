@@ -11,6 +11,9 @@ import { ApiError } from "@/lib/api";
 import { phoneNumberError, PHONE_PREFIX } from "@/lib/phone-number";
 import { authHref, safeLocalRedirect } from "@/lib/routes";
 
+import { emailError, passwordErrors } from "@/lib/registration-validation";
+import { readRegistrationDraft, saveRegistrationDraft } from "@/lib/registration-draft";
+
 import { PhoneNumberField } from "./phone-number-field";
 import { useAuth } from "./auth-provider";
 import { AuthButton, AuthField, AuthFrame, AuthMessage } from "./auth-ui";
@@ -21,16 +24,31 @@ export function RegistrationForm() {
   const { register, status } = useAuth();
   const next = searchParams.get("next");
   const nextRoute = safeLocalRedirect(next);
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [password, setPassword] = useState("");
-  const [passwordConfirm, setPasswordConfirm] = useState("");
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [firstName, setFirstName] = useState(() => readRegistrationDraft()?.first_name ?? "");
+  const [lastName, setLastName] = useState(() => readRegistrationDraft()?.last_name ?? "");
+  const [email, setEmail] = useState(() => readRegistrationDraft()?.email ?? "");
+  const [phone, setPhone] = useState(() => readRegistrationDraft()?.phone_number.replace(/^\+994/, "") ?? "");
+  const [password, setPassword] = useState(() => readRegistrationDraft()?.password ?? "");
+  const [passwordConfirm, setPasswordConfirm] = useState(() => readRegistrationDraft()?.password_confirm ?? "");
+  const [acceptedTerms, setAcceptedTerms] = useState(() => readRegistrationDraft()?.accept_terms ?? false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const retry = useRetryCountdown();
+  const [attempted, setAttempted] = useState(false);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const errors: Record<string, string | null> = {
+    first_name: firstName.trim() ? null : "Adınızı daxil edin.",
+    last_name: lastName.trim() ? null : "Soyadınızı daxil edin.",
+    email: emailError(email),
+    phone_number: phoneNumberError(phone),
+    password: password ? passwordErrors(password).join(" ") || null : "Şifrəni daxil edin.",
+    password_confirm: !passwordConfirm ? "Şifrəni təkrarlayın." : password !== passwordConfirm ? "Şifrələr eyni deyil." : null,
+    accept_terms: acceptedTerms ? null : "Şərtləri qəbul etməlisiniz.",
+  };
+  const fieldError = (name: string) => attempted || touched[name] ? errors[name] : null;
+  useEffect(() => {
+    if (status !== "authenticated") saveRegistrationDraft({first_name: firstName, last_name: lastName, email, phone_number: `${PHONE_PREFIX}${phone}`, password, password_confirm: passwordConfirm, accept_terms: acceptedTerms});
+  }, [firstName, lastName, email, phone, password, passwordConfirm, acceptedTerms, status]);
 
   useEffect(() => {
     if (status === "authenticated") router.replace(nextRoute);
@@ -39,13 +57,11 @@ export function RegistrationForm() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (submitting || retry.remaining > 0) return;
-    const phoneError = phoneNumberError(phone);
-    if (phoneError) {
-      setError(phoneError);
-      return;
-    }
-    if (password !== passwordConfirm) {
-      setError("Şifrələr eyni deyil.");
+    setAttempted(true);
+    if (Object.values(errors).some(Boolean)) {
+      setError("Məlumatları tamamlayın və işarələnmiş sahələri yoxlayın.");
+      const firstInvalid = Object.keys(errors).find((name) => errors[name]);
+      event.currentTarget.querySelector<HTMLInputElement>(`[name="${firstInvalid}"]`)?.focus();
       return;
     }
 
@@ -79,15 +95,6 @@ export function RegistrationForm() {
     }
   };
 
-  const valid =
-    firstName.trim() &&
-    lastName.trim() &&
-    email.trim() &&
-    !phoneNumberError(phone) &&
-    password &&
-    passwordConfirm &&
-    acceptedTerms;
-
   return (
     <AuthFrame
       title="Qeydiyyat"
@@ -102,12 +109,14 @@ export function RegistrationForm() {
         </p>
       }
     >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3 p-6">
+      <form noValidate onSubmit={handleSubmit} className="flex flex-col gap-3 p-6">
         <div className="grid grid-cols-2 gap-3">
           <AuthField
             label="Ad"
             icon="user"
             name="first_name"
+            error={fieldError("first_name")}
+            onBlur={() => setTouched((current) => ({...current, first_name: true}))}
             autoComplete="given-name"
             required
             value={firstName}
@@ -118,6 +127,8 @@ export function RegistrationForm() {
             label="Soyad"
             icon="user"
             name="last_name"
+            error={fieldError("last_name")}
+            onBlur={() => setTouched((current) => ({...current, last_name: true}))}
             autoComplete="family-name"
             required
             value={lastName}
@@ -130,22 +141,26 @@ export function RegistrationForm() {
           icon="lock"
           type="email"
           name="email"
+            error={fieldError("email")}
+            onBlur={() => setTouched((current) => ({...current, email: true}))}
           autoComplete="email"
           required
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           disabled={submitting}
         />
-        <PhoneNumberField value={phone} onChange={setPhone} disabled={submitting} />
+        <PhoneNumberField showErrors={attempted} value={phone} onChange={setPhone} disabled={submitting} />
         <AuthField
           label="Şifrə"
           icon="eye"
           type="password"
           name="password"
+            error={fieldError("password")}
+            onBlur={() => setTouched((current) => ({...current, password: true}))}
           autoComplete="new-password"
           required
           value={password}
-          onChange={(event) => setPassword(event.target.value)}
+          onChange={(event) => { setPassword(event.target.value); setTouched((current) => ({...current, password: true})); }}
           disabled={submitting}
         />
         <AuthField
@@ -153,15 +168,19 @@ export function RegistrationForm() {
           icon="eye"
           type="password"
           name="password_confirm"
+            error={fieldError("password_confirm")}
+            onBlur={() => setTouched((current) => ({...current, password_confirm: true}))}
           autoComplete="new-password"
           required
           value={passwordConfirm}
-          onChange={(event) => setPasswordConfirm(event.target.value)}
+          onChange={(event) => { setPasswordConfirm(event.target.value); setTouched((current) => ({...current, password_confirm: true})); }}
           disabled={submitting}
         />
         <label className="flex cursor-pointer items-center gap-3 py-2 text-[12px] leading-4 text-[var(--hara-auth-secondary)]">
           <input
             type="checkbox"
+            name="accept_terms"
+            aria-invalid={Boolean(fieldError("accept_terms"))}
             checked={acceptedTerms}
             onChange={(event) => setAcceptedTerms(event.target.checked)}
             className="peer sr-only"
@@ -173,9 +192,10 @@ export function RegistrationForm() {
           </span>
           Şərtlər və qaydaları qəbul edirəm
         </label>
+        {fieldError("accept_terms") ? <p className="text-[12px] text-red-600 dark:text-red-300">{errors.accept_terms}</p> : null}
         {error ? <AuthMessage>{error}</AuthMessage> : null}
         {retry.remaining > 0 ? <p role="status" className="text-sm text-[var(--hara-auth-secondary)]">Yenidən cəhd üçün {retry.remaining} saniyə gözləyin.</p> : null}
-        <AuthButton type="submit" disabled={submitting || retry.remaining > 0 || !valid}>
+        <AuthButton type="submit" disabled={submitting || retry.remaining > 0}>
           {submitting ? "Hesab yaradılır…" : "Qeydiyyatdan keç"}
         </AuthButton>
       </form>

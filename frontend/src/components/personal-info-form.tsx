@@ -92,7 +92,7 @@ function PersonalInfoEditor({ user }: { user: UserProfile }) {
     "https://lh3.googleusercontent.com/",
   )
     ? user.avatar_url
-    : "/figma/more/avatar.png";
+    : "/figma/home/hara-logo-32.svg";
   const displayName = form.display_name || "HARA istifadəçisi";
 
   const setField = <Field extends keyof ProfileForm>(

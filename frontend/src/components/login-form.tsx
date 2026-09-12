@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 
+import { retryAfterSeconds, useRetryCountdown } from "@/hooks/use-retry-countdown";
+
 import { ApiError } from "@/lib/api";
 import { authHref, safeLocalRedirect } from "@/lib/routes";
 
@@ -24,6 +26,7 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const retry = useRetryCountdown();
   const nextRoute = safeLocalRedirect(searchParams.get("next"));
 
   useEffect(() => {
@@ -34,13 +37,14 @@ export function LoginForm() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (submitting) return;
+    if (submitting || retry.remaining > 0) return;
 
     setSubmitting(true);
     setError(null);
     try {
       await login(identifier.trim(), password);
     } catch (caughtError) {
+      if (caughtError instanceof ApiError && caughtError.status === 429) retry.start(retryAfterSeconds(caughtError.payload));
       if (
         caughtError instanceof ApiError &&
         (caughtError.status === 400 || caughtError.status === 401)
@@ -105,12 +109,12 @@ export function LoginForm() {
               Şifrəni unutdun?
             </Link>
           </div>
-          {error ? <AuthMessage>{error}</AuthMessage> : null}
+          {error ? <AuthMessage title={retry.remaining > 0 ? "Bir qədər gözləyin" : "Daxil olmaq mümkün olmadı"}>{error}</AuthMessage> : null}
           <AuthButton
             type="submit"
-            disabled={submitting || !identifier.trim() || !password}
+            disabled={submitting || retry.remaining > 0 || !identifier.trim() || !password}
           >
-            {submitting ? "Daxil olunur…" : "Daxil ol"}
+            {submitting ? "Daxil olunur…" : retry.remaining > 0 ? `Yenidən cəhd • ${retry.remaining} san` : error ? "Yenidən cəhd et" : "Daxil ol"}
           </AuthButton>
         </form>
 
