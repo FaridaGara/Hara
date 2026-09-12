@@ -73,3 +73,9 @@
 .ticketCode p { font-size: 13px; line-height: 18px; color: var(--hara-auth-secondary); }
 .ticketCode code { margin-top: 8px; font-size: 13px; line-height: 22px; overflow-wrap: anywhere; user-select: all; color: var(--hara-tab-active); }
 @media (min-width: 720px) { .wide .content { padding: 24px 32px 40px; } .wide .header { padding-inline: 32px; } .wide .footer { max-width: 402px; width: 100%; align-self: center; } .fullDialog { min-height: min(760px, 90dvh); max-height: 90dvh; border-radius: 24px; } }
+
+.cardDetails { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+@media (min-width: 1024px) {
+  .reviewRow { display: grid; grid-template-columns: 120px 340px minmax(0, 1fr) 168px; align-items: center; gap: 24px; }
+  .reviewRow .eventHeading { min-height: 88px; }
+}

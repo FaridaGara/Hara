@@ -6,7 +6,7 @@ import { notificationsApi } from "@/lib/api/notifications";
 import { submissionTime } from "@/lib/submission-status";
 import { useAuth } from "./auth-provider";
 import { AuthMessage } from "./auth-ui";
-import { LifecycleIntro, LifecycleLoading, LifecyclePage, LifecycleState } from "./lifecycle-ui";
+import { LifecycleIntro, LifecycleLoading, LifecyclePage, LifecycleState, Notice } from "./lifecycle-ui";
 import css from "./lifecycle-ui.module.css";
 
 export function NotificationLink({ children }: { children: ReactNode }) {
@@ -81,15 +81,14 @@ function Inbox() {
     {loading ? <LifecycleLoading label="Bildirişlər yüklənir…" /> : null}
     {result && !loading ? <>
       {!result.results.length ? <LifecycleState title="Hələ bildirişiniz yoxdur">Tədbirlər, biletlər və geri ödənişlə bağlı yeniliklər burada görünəcək.</LifecycleState> : null}
-      <div className={css.stack}>{result.results.map(item => <article key={item.id} className={`${css.notice} ${!item.read_at && item.type === "refund_pending" ? css.accentNotice : ""}`} aria-label={item.title}>
-        <div className={css.noticeHeading}><span className={css.bell} aria-hidden="true" /><h2>{item.title}</h2></div>
+      <div className={css.stack}>{result.results.map(item => <Notice as="article" key={item.id} title={item.title} variant={item.type === "refund_pending" ? "refund" : item.type === "event_cancelled" ? "cancelled" : "info"}>
         {item.event_title ? <strong>{item.event_title}</strong> : null}
         <p>{item.body}</p>
         {item.cancellation_reason ? <p className={css.note}>Ləğv səbəbi: {item.cancellation_reason}</p> : null}
         <div className={css.meta}><time dateTime={item.created_at}>{submissionTime(item.created_at)}</time> · <span>{item.read_at ? "Oxunub" : "Yeni"}</span></div>
         {!item.read_at ? <button className={css.secondary} disabled={reading !== null} onClick={() => void markRead(item.id)}>{reading === item.id ? "Saxlanılır…" : "Oxunmuş kimi işarələ"}</button> : null}
         <Link className={css.textButton} href={item.type === "organizer_event_published" && item.event_status === "published" && item.event_slug ? `/events/${item.event_slug}` : item.type.startsWith("organizer_") ? "/my-events" : "/tickets"}>{item.type === "organizer_event_published" && item.event_status === "published" && item.event_slug ? "Tədbirə bax" : item.type.startsWith("organizer_") ? "Tədbirlərimə bax" : "Biletlərimə bax"}</Link>
-      </article>)}</div>
+      </Notice>)}</div>
       {result.previous || result.next ? <nav className={css.pagination} aria-label="Bildiriş səhifələri"><button className={css.secondary} disabled={!result.previous || reading !== null} onClick={() => navigate(page - 1)}>Əvvəlki</button><button className={css.secondary} disabled={!result.next || reading !== null} onClick={() => navigate(page + 1)}>Növbəti</button></nav> : null}
     </> : null}
     {result || !error ? <div className={css.refresh}>{refreshButton}</div> : null}

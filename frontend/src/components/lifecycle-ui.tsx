@@ -25,13 +25,16 @@ export function LifecycleIntro({ title, children }: { title: string; children?: 
   return <div className={css.intro}><h1>{title}</h1>{children ? <p>{children}</p> : null}</div>;
 }
 
-export function Notice({ title, children, accent = false, role }: {
-  title: string; children: ReactNode; accent?: boolean; role?: "alert" | "status";
+export function Notice({ title, children, accent = false, variant = "info", metadata, action, role, as: Tag = "section" }: {
+  title: string; children: ReactNode; accent?: boolean; variant?: "info" | "refund" | "cancelled";
+  metadata?: ReactNode; action?: ReactNode; as?: "section" | "article"; role?: "alert" | "status";
 }) {
-  return <section className={`${css.notice} ${accent ? css.accentNotice : ""}`} role={role}>
+  return <Tag className={`${css.notice} ${accent || variant === "refund" ? css.accentNotice : ""}`} role={role} aria-label={title} data-variant={variant}>
     <div className={css.noticeHeading}><span className={css.bell} aria-hidden="true" /><h2>{title}</h2></div>
     {children}
-  </section>;
+    {metadata ? <div className={css.meta}>{metadata}</div> : null}
+    {action}
+  </Tag>;
 }
 
 export function LifecycleState({ title, children, action, error = false }: {
@@ -49,19 +52,19 @@ export function LifecycleLoading({ label }: { label: string }) {
   </div>;
 }
 
-export function SubmissionCard({ item, children, action }: { item: EventSubmission; children?: ReactNode; action?: ReactNode }) {
+export function SubmissionCard({ item, children, action, layout = "card" }: { item: EventSubmission; children?: ReactNode; action?: ReactNode; layout?: "card" | "review-row" }) {
   // Submitted draft images are private data returned by the authenticated API.
   const raw = item.cover_thumbnail || item.snapshot?.media?.cover || "";
   const cover = safeEventImageUrl(raw);
   const start = item.start_at || (item.snapshot?.schedule.startDate && item.snapshot.schedule.startTime ? `${item.snapshot.schedule.startDate}T${item.snapshot.schedule.startTime}:00+04:00` : "");
   const venue = item.venue_name || item.snapshot?.schedule.venue?.name;
-  return <article className={css.eventCard} aria-label={item.title}>
+  return <article className={`${css.eventCard} ${layout === "review-row" ? css.reviewRow : ""}`} aria-label={item.title}>
     <span className={css.status} data-status={item.status}>{submissionStatuses[item.status].label}</span>
     <div className={css.eventHeading}>
       {cover ? <Image unoptimized className={css.thumbnail} src={cover} alt="" width={72} height={88} /> : null}
       <div><h2>{item.title}</h2>{start ? <p>{formatBakuDate(start, true)}</p> : null}{venue ? <p>{venue}</p> : null}</div>
     </div>
-    {children}{action}
+    {children ? <div className={css.cardDetails}>{children}</div> : null}{action}
   </article>;
 }
 

@@ -50,7 +50,7 @@ function ReviewQueue() {
     {loading ? <LifecycleLoading label="Tədbirlər yüklənir…" /> : null}
     {error ? <AuthMessage>{error}</AuthMessage> : null}
     {result?.results.length === 0 && !loading ? <LifecycleState title="Uyğun tədbir tapılmadı">Axtarışı və ya status filtrini dəyişərək yenidən yoxlayın.</LifecycleState> : null}
-    <div className={css.queue}>{result?.results.map(item => <SubmissionCard key={item.id} item={item} action={<Link className={ui.secondary} aria-label="Tədbirə bax və yoxla" href={`/team/event-reviews/${item.id}`}>Baxış keçir</Link>}>
+    <div className={css.queue}>{result?.results.map(item => <SubmissionCard key={item.id} item={item} layout="review-row" action={<Link className={ui.secondary} aria-label="Tədbirə bax və yoxla" href={`/team/event-reviews/${item.id}`}>Baxış keçir</Link>}>
       <div className={ui.meta}><p>{item.creator.name}</p><p>{item.creator.email}</p><p>Göndərildi: {submissionTime(item.submitted_at)} · Bakı vaxtı</p></div>
     </SubmissionCard>)}</div>
     <div className={ui.refresh}>{result ? <span>{result.count} tədbir · Səhifə {query.page}</span> : null}<button className={ui.textButton} disabled={loading} onClick={() => { setLoading(true); setRetry(v => v + 1); }}>Yenilə</button></div>

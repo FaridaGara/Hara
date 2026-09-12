@@ -52,7 +52,7 @@ function TicketContent({ ticketId, loadTicket }: { ticketId: string; loadTicket:
         </section>
         <dl className={css.receipt}><div><dt>Bilet №</dt><dd>{ticket.id}</dd></div><div><dt>İştirakçı:</dt><dd>{ticket.owner_display_name}</dd></div><div><dt>Bitmə vaxtı:</dt><dd>{formatBakuDate(ticket.event_end_at)}</dd></div></dl>
       </article>
-      {cancelled ? <Notice accent={pending} title={ticket.status === "refunded" ? "Geri ödəniş tamamlanıb" : pending ? "Geri ödəniş gözlənilir" : "Bilet ləğv edilib"}>
+      {cancelled ? <Notice variant={pending ? "refund" : ticket.status === "refunded" ? "info" : "cancelled"} title={ticket.status === "refunded" ? "Geri ödəniş tamamlanıb" : pending ? "Geri ödəniş gözlənilir" : "Bilet ləğv edilib"}>
         <p>{ticket.status === "refunded" ? "Bilet sistemdə geri qaytarılmış kimi qeyd edilib. Bu biletlə giriş mümkün deyil." : pending ? "Sifarişiniz geri ödəniş üçün qeydə alınıb. Məbləğ hələ qaytarılmayıb; komanda müraciəti ayrıca emal edəcək." : paid ? "Biletiniz etibarsızdır. Geri ödənişlə bağlı məlumatı bildirişlərinizdən izləyin." : "Ödənişsiz biletiniz etibarsızdır. Bu bilet üçün geri ödəniş tələb olunmur."}</p>
         {ticket.cancellation_reason ? <p className={css.note}>Ləğv səbəbi: {ticket.cancellation_reason}</p> : null}
       </Notice> : null}
