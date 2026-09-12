@@ -43,6 +43,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "last_name",
             "phone_number",
             "avatar_url",
+            "organizer_name", "organizer_description", "organizer_website",
+            "tax_id", "tax_legal_name",
             "birth_date",
             "interests",
             "account_type",
@@ -62,6 +64,31 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "can_review_events",
             "can_moderate_events",
         )
+
+    def validate_organizer_website(self, value):
+        if value and not value.lower().startswith(("https://", "http://")):
+            raise serializers.ValidationError("HTTP və ya HTTPS linki daxil et.")
+        return value
+
+    def validate(self, attrs):
+        organizer_fields = ("organizer_name", "organizer_description", "organizer_website", "tax_id", "tax_legal_name")
+        if any(key in attrs for key in organizer_fields):
+            errors = {}
+            for key in ("display_name", "phone_number", "organizer_name", "organizer_description", "tax_id", "tax_legal_name"):
+                value = attrs.get(key, getattr(self.instance, key, ""))
+                if not value.strip():
+                    errors[key] = "Bu sahə məcburidir."
+            tax_id = attrs.get("tax_id", getattr(self.instance, "tax_id", ""))
+            if tax_id and not re.fullmatch(r"[0-9]{10}", tax_id):
+                errors["tax_id"] = "VÖEN 10 rəqəmdən ibarət olmalıdır."
+            phone = normalize_phone(attrs.get("phone_number", getattr(self.instance, "phone_number", "")))
+            if not PHONE_PATTERN.fullmatch(phone):
+                errors["phone_number"] = "+994 ölkə kodundan sonra 9 rəqəm daxil et."
+            else:
+                attrs["phone_number"] = phone
+            if errors:
+                raise serializers.ValidationError(errors)
+        return attrs
 
     @extend_schema_field(serializers.BooleanField())
     def get_can_review_events(self, obj):

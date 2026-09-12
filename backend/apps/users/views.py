@@ -471,7 +471,7 @@ class UserProfileAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        return Response(UserProfileSerializer(request.user).data)
+        return Response(UserProfileSerializer(request.user).data, headers={"Cache-Control": "private, no-store"})
 
     def patch(self, request):
         serializer = UserProfileSerializer(
@@ -481,4 +481,4 @@ class UserProfileAPIView(APIView):
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response(serializer.data)
+        return Response(serializer.data, headers={"Cache-Control": "private, no-store"})

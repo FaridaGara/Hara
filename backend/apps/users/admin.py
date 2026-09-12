@@ -65,6 +65,7 @@ class HaraUserAdmin(UserAdmin):
                 )
             },
         ),
+        ("Organizer information", {"fields": ("organizer_name", "organizer_description", "organizer_website", "tax_id", "tax_legal_name")}),
         ("Important dates", {"fields": ("last_login", "date_joined")}),
     )
     add_fieldsets = (

@@ -144,7 +144,7 @@ export function EventReviewStep({ draft, replaceDraft, save, notice, storageErro
             {issues.map((issue, index) => <div key={index} className={styles.reviewIssue}><p>{issue.message}</p><button disabled={frozen} onClick={() => onEdit(issue.step)}>Düzəliş et</button></div>)}
             <button className={styles.reviewPreview} onClick={() => setView("preview")}>İştirakçı kimi önbaxış <WizardIcon name="forward" /></button>
             <div className={styles.reviewNotice}><strong>Əvvəlcə HARA yoxlayacaq</strong><p>Göndərdikdən sonra statusu izləyə biləcəksən. Təsdiqlənənədək tədbir axtarışda və bilet satışında görünməyəcək.</p></div>
-            {eligibility ? <div className={styles.reviewNotice}><strong>{eligibility.eligible ? "Hesab göndərməyə hazırdır" : "Hesab məlumatlarını yoxla"}</strong><p>{eligibility.detail}</p>{!eligibility.eligible ? <Link className={styles.retry} href="/personal-info?edit=1">Profilə keç</Link> : null}</div> : null}
+            {eligibility ? <div className={styles.reviewNotice}><strong>{eligibility.eligible ? "Hesab göndərməyə hazırdır" : "Hesab məlumatlarını yoxla"}</strong><p>{eligibility.detail}</p>{!eligibility.eligible ? <Link className={styles.retry} href={freeEvent ? "/personal-info?edit=1" : "/organizer-profile?from=event"}>Profilini tamamla</Link> : null}</div> : null}
           </>}
           {locked || view === "confirm" ? <button disabled={busy} className={styles.reviewPreview} onClick={() => setView("preview")}>İştirakçı kimi önbaxış <WizardIcon name="forward" /></button> : null}
         </>}
