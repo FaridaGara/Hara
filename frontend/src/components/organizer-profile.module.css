@@ -1,0 +1,11 @@
+.form { display: flex; flex-direction: column; gap: 24px; }
+.section { display: flex; flex-direction: column; gap: 12px; }
+.section h2 { font-size: 20px; line-height: 25px; font-weight: 600; letter-spacing: -.45px; }
+.field { display: flex; flex-direction: column; gap: 2px; padding: 8px 16px; min-height: 56px; border-radius: 16px; background: var(--hara-auth-field); }
+.field + .field, .section > div > .field ~ .field { margin-top: 12px; }
+.field span { color: var(--hara-auth-secondary); font-size: 12px; line-height: 16px; }
+.field input { width: 100%; min-width: 0; border: 0; background: transparent; color: var(--hara-auth-text); font-size: 17px; line-height: 22px; letter-spacing: -.43px; }
+.field input::placeholder { color: var(--hara-auth-muted); }
+.field:has([aria-invalid="true"]) { outline: 1px solid #dc3545; }
+.error { color: var(--hara-auth-text); font-size: 13px; line-height: 18px; padding-top: 4px; }
+.actions { display: flex; flex-direction: column; gap: 8px; padding-bottom: var(--hara-safe-bottom); }

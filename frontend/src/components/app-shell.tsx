@@ -29,7 +29,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     "/reset-password",
   ].some((route) => pathname === route || pathname.startsWith(`${route}/`));
   const usesImmersiveShell = pathname.startsWith("/events/");
-  const usesWizardShell = pathname.startsWith("/tickets/") || pathname === "/notifications" || pathname.startsWith("/team/event-reviews") || pathname === "/my-events" || pathname === "/create-event" || pathname.startsWith("/create-event/");
+  const usesWizardShell = pathname === "/organizer-profile" || pathname.startsWith("/tickets/") || pathname === "/notifications" || pathname.startsWith("/team/event-reviews") || pathname === "/my-events" || pathname === "/create-event" || pathname.startsWith("/create-event/");
 
   const handleLogout = () => {
     logout();

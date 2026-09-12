@@ -97,6 +97,11 @@ export type UserProfile = {
   avatar_url: string;
   birth_date: string | null;
   interests: string[];
+  organizer_name?: string;
+  organizer_description?: string;
+  organizer_website?: string;
+  tax_id?: string;
+  tax_legal_name?: string;
   can_review_events?: boolean;
   can_moderate_events?: boolean;
   account_type: "user" | "organizer" | "admin";
@@ -141,6 +146,7 @@ export type UserProfileUpdate = Pick<
   | "avatar_url"
   | "birth_date"
   | "interests"
+  | "organizer_name" | "organizer_description" | "organizer_website" | "tax_id" | "tax_legal_name"
 >;
 
 export type AuthRefreshResponse = {

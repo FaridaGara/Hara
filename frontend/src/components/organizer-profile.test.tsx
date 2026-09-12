@@ -1,0 +1,43 @@
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, expect, it, vi } from "vitest";
+import { OrganizerProfile } from "./organizer-profile";
+const state = vi.hoisted(() => ({ user: { id: 7, email: "owner@example.com", first_name: "", last_name: "", display_name: "Owner", phone_number: "+994504567890", organizer_name: "Events", organizer_description: "Concerts", organizer_website: "https://example.com", tax_id: "1234567890", tax_legal_name: "Legal name", account_type: "organizer", role: "organizer", is_email_verified: true }, updateProfile: vi.fn(), push: vi.fn() }));
+vi.mock("./auth-provider", () => ({ useAuth: () => state }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: state.push }), useSearchParams: () => new URLSearchParams() }));
+beforeEach(() => { state.updateProfile.mockReset(); state.push.mockReset(); state.updateProfile.mockImplementation(async data => ({ ...state.user, ...data })); });
+it("loads saved fields and saves separately from event creation", async () => {
+  render(<OrganizerProfile />);
+  expect((screen.getByLabelText("VÖEN *") as HTMLInputElement).value).toBe("1234567890");
+  await userEvent.clear(screen.getByLabelText("Təşkilatçı / brend adı *"));
+  await userEvent.type(screen.getByLabelText("Təşkilatçı / brend adı *"), "Updated");
+  await userEvent.click(screen.getByRole("button", { name: "Yadda saxla" }));
+  await screen.findByText("Məlumatların yadda saxlanıldı.");
+  expect(state.updateProfile).toHaveBeenCalledWith(expect.objectContaining({ organizer_name: "Updated", tax_id: "1234567890" }));
+  expect(state.push).not.toHaveBeenCalled();
+  await userEvent.click(screen.getByRole("button", { name: "Tədbir yarat" }));
+  expect(state.push).toHaveBeenCalledWith("/create-event");
+});
+it("keeps edits after failed save", async () => {
+  state.updateProfile.mockRejectedValue(new Error("Server əlçatan deyil"));
+  render(<OrganizerProfile />);
+  await userEvent.clear(screen.getByLabelText("Vergi ödəyicisinin rəsmi adı *"));
+  await userEvent.type(screen.getByLabelText("Vergi ödəyicisinin rəsmi adı *"), "New legal name");
+  await userEvent.click(screen.getByRole("button", { name: "Yadda saxla" }));
+  await screen.findByRole("alert");
+  expect((screen.getByLabelText("Vergi ödəyicisinin rəsmi adı *") as HTMLInputElement).value).toBe("New legal name");
+  expect(screen.queryByText("Məlumatların yadda saxlanıldı.")).toBeNull();
+});
+it("blocks invalid tax ID and asks before leaving unsaved edits", async () => {
+  render(<OrganizerProfile />);
+  await userEvent.clear(screen.getByLabelText("VÖEN *"));
+  await userEvent.type(screen.getByLabelText("VÖEN *"), "123");
+  await userEvent.click(screen.getByRole("button", { name: "Yadda saxla" }));
+  expect(state.updateProfile).not.toHaveBeenCalled();
+  expect(screen.getByText("VÖEN 10 rəqəmdən ibarət olmalıdır.")).toBeTruthy();
+  await userEvent.click(screen.getByRole("button", { name: "Tədbir yarat" }));
+  const dialog = screen.getByRole("dialog");
+  expect(state.push).not.toHaveBeenCalled();
+  await userEvent.click(within(dialog).getByRole("button", { name: "Profilə qayıt" }));
+  expect((screen.getByLabelText("VÖEN *") as HTMLInputElement).value).toBe("123");
+});
