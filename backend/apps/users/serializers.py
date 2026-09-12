@@ -9,7 +9,7 @@ from .models import User
 from .login_identifiers import find_login_user, normalize_phone
 
 
-PHONE_PATTERN = re.compile(r"^\+994[0-9]{9}$")
+PHONE_PATTERN = re.compile(r"^\+994(?:10|50|51|55|60|70|77|99)[0-9]{7}$")
 
 
 def validate_new_password(password, *, user=None):
@@ -21,7 +21,13 @@ def validate_new_password(password, *, user=None):
     try:
         password_validation.validate_password(password, user=user)
     except DjangoValidationError as exc:
-        errors.extend(exc.messages)
+        messages = {
+            "password_too_short": "Şifrə ən azı 8 simvoldan ibarət olmalıdır.",
+            "password_too_common": "Bu şifrə çox istifadə olunur. Daha güclü şifrə seçin.",
+            "password_entirely_numeric": "Şifrə yalnız rəqəmlərdən ibarət ola bilməz.",
+            "password_too_similar": "Şifrə şəxsi məlumatlarınıza çox bənzəyir. Başqa şifrə seçin.",
+        }
+        errors.extend(messages.get(error.code, "Şifrə təhlükəsizlik tələblərinə uyğun deyil. Başqa şifrə seçin.") for error in exc.error_list)
     if errors:
         raise serializers.ValidationError(errors)
     return password
@@ -155,7 +161,7 @@ class CredentialsLoginSerializer(serializers.Serializer):
 class RegistrationSerializer(serializers.Serializer):
     first_name = serializers.CharField(max_length=150)
     last_name = serializers.CharField(max_length=150)
-    email = serializers.EmailField(max_length=254)
+    email = serializers.EmailField(max_length=254, error_messages={"invalid": "Düzgün e-poçt ünvanı daxil edin.", "blank": "E-poçt ünvanını daxil edin.", "required": "E-poçt ünvanını daxil edin."})
     phone_number = serializers.CharField(max_length=32)
     password = serializers.CharField(write_only=True, trim_whitespace=False)
     password_confirm = serializers.CharField(write_only=True, trim_whitespace=False)
@@ -168,7 +174,7 @@ class RegistrationSerializer(serializers.Serializer):
         phone = normalize_phone(value)
         if not PHONE_PATTERN.fullmatch(phone):
             raise serializers.ValidationError(
-                "+994 ölkə kodundan sonra 9 rəqəm daxil edin."
+                "+994 ölkə kodu və düzgün Azərbaycan mobil prefiksi ilə 9 rəqəm daxil edin."
             )
         national_number = phone[4:]
         if (
@@ -232,7 +238,7 @@ class RegistrationSerializer(serializers.Serializer):
 
 
 class VerificationCodeSerializer(serializers.Serializer):
-    email = serializers.EmailField(max_length=254)
+    email = serializers.EmailField(max_length=254, error_messages={"invalid": "Düzgün e-poçt ünvanı daxil edin.", "blank": "E-poçt ünvanını daxil edin.", "required": "E-poçt ünvanını daxil edin."})
     code = serializers.RegexField(r"^\d{4}$")
 
     def validate_email(self, value):
@@ -240,7 +246,7 @@ class VerificationCodeSerializer(serializers.Serializer):
 
 
 class VerificationResendSerializer(serializers.Serializer):
-    email = serializers.EmailField(max_length=254)
+    email = serializers.EmailField(max_length=254, error_messages={"invalid": "Düzgün e-poçt ünvanı daxil edin.", "blank": "E-poçt ünvanını daxil edin.", "required": "E-poçt ünvanını daxil edin."})
     purpose = serializers.ChoiceField(choices=("registration", "password_reset"))
 
     def validate_email(self, value):
@@ -248,7 +254,7 @@ class VerificationResendSerializer(serializers.Serializer):
 
 
 class PasswordResetRequestSerializer(serializers.Serializer):
-    email = serializers.EmailField(max_length=254)
+    email = serializers.EmailField(max_length=254, error_messages={"invalid": "Düzgün e-poçt ünvanı daxil edin.", "blank": "E-poçt ünvanını daxil edin.", "required": "E-poçt ünvanını daxil edin."})
 
     def validate_email(self, value):
         return value.strip().casefold()

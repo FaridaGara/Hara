@@ -96,7 +96,7 @@ export function VerificationForm() {
   };
 
   const resend = async () => {
-    if (!email || remaining > 0 || resending) return;
+    if (!email || remaining > 0 || resending || submitting) return;
     setResending(true);
     setError(null);
     setNotice(null);
@@ -139,12 +139,15 @@ export function VerificationForm() {
           </p>
         </div>
 
+        {resending ? <AuthMessage tone="success" title="Yeni kod göndərilir">Zəhmət olmasa gözləyin.</AuthMessage> : null}
         <div className="flex justify-center gap-3 py-2">
           {digits.map((digit, index) => (
             <input
               key={index}
               ref={(element) => { inputsRef.current[index] = element; }}
               aria-label={`Kodun ${index + 1}-ci rəqəmi`}
+              disabled={submitting || resending}
+              aria-invalid={Boolean(error)}
               inputMode="numeric"
               autoComplete={index === 0 ? "one-time-code" : "off"}
               maxLength={1}
@@ -166,7 +169,7 @@ export function VerificationForm() {
           <button
             type="button"
             onClick={resend}
-            disabled={!email || remaining > 0 || resending}
+            disabled={!email || remaining > 0 || resending || submitting}
             className="font-semibold text-[#4e55c5] disabled:opacity-50"
           >
             {resending ? "Göndərilir…" : "Kodu yenidən göndər"}
@@ -182,7 +185,7 @@ export function VerificationForm() {
         ) : null}
         <AuthButton
           type="submit"
-          disabled={submitting || verificationRetry.remaining > 0 || !email || digits.some((digit) => !digit)}
+          disabled={submitting || resending || verificationRetry.remaining > 0 || !email || digits.some((digit) => !digit)}
         >
           {submitting ? "Təsdiqlənir…" : "Təsdiq et"}
         </AuthButton>

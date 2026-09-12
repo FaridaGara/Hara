@@ -6,6 +6,7 @@ import { FormEvent, useState } from "react";
 
 import { retryAfterSeconds, useRetryCountdown } from "@/hooks/use-retry-countdown";
 
+import { emailError } from "@/lib/registration-validation";
 import { ApiError, authApi } from "@/lib/api";
 
 import { AuthButton, AuthField, AuthFrame, AuthMessage } from "./auth-ui";
@@ -20,6 +21,7 @@ export function ForgotPasswordForm() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!email.trim() || submitting || retry.remaining > 0) return;
+    if (emailError(email)) { setError(emailError(email)); return; }
     setSubmitting(true);
     setError(null);
     try {
@@ -43,7 +45,7 @@ export function ForgotPasswordForm() {
 
   return (
     <AuthFrame title="Şifrə bərpası" subtitle="Şifrəni sıfırlayın" backHref="/login">
-      <form onSubmit={handleSubmit} className="flex flex-col gap-6 p-6">
+      <form noValidate onSubmit={handleSubmit} className="flex flex-col gap-6 p-6">
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <Image src="/figma/auth/key.svg" alt="" width={24} height={24} className="hara-auth-icon" />

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { InputHTMLAttributes, ReactNode, Ref, useState } from "react";
+import { InputHTMLAttributes, ReactNode, Ref, useId, useState } from "react";
 
 type AuthFrameProps = {
   title: string;
@@ -74,15 +74,18 @@ type AuthFieldProps = InputHTMLAttributes<HTMLInputElement> & {
   icon: "lock" | "user" | "eye";
   prefix?: string;
   inputRef?: Ref<HTMLInputElement>;
+  error?: string | null;
 };
 
-export function AuthField({ label, icon, type, className, prefix, inputRef, ...props }: AuthFieldProps) {
+export function AuthField({ label, icon, type, className, prefix, inputRef, error, ...props }: AuthFieldProps) {
+  const errorId = useId();
   const [visible, setVisible] = useState(false);
   const isPassword = type === "password";
   const inputType = isPassword && visible ? "text" : type;
 
   return (
-    <label className={`flex h-14 min-w-0 items-center gap-2 rounded-2xl bg-[var(--hara-auth-field)] px-4 ${className || ""}`}>
+    <div className="min-w-0 space-y-1">
+    <label className={`flex h-14 min-w-0 items-center gap-2 rounded-2xl bg-[var(--hara-auth-field)] px-4 ${error || props["aria-invalid"] ? "ring-1 ring-red-600 dark:ring-red-300" : ""} ${className || ""}`}>
       <span className="sr-only">{label}</span>
       <Image
         src={`/figma/auth/${icon}.svg`}
@@ -94,6 +97,8 @@ export function AuthField({ label, icon, type, className, prefix, inputRef, ...p
       {prefix ? <span aria-hidden="true" className="shrink-0 text-[17px]">{prefix}</span> : null}
       <input
         {...props}
+        aria-invalid={Boolean(error) || props["aria-invalid"]}
+        aria-describedby={error ? errorId : props["aria-describedby"]}
         ref={inputRef}
         type={inputType}
         aria-label={label}
@@ -117,6 +122,8 @@ export function AuthField({ label, icon, type, className, prefix, inputRef, ...p
         </button>
       ) : null}
     </label>
+    {error ? <p id={errorId} className="px-2 text-[12px] leading-4 text-red-600 dark:text-red-300">{error}</p> : null}
+    </div>
   );
 }
 
@@ -134,24 +141,19 @@ export function AuthButton({
   );
 }
 
-export function AuthMessage({
-  children,
-  tone = "error",
-}: {
+export function AuthMessage({ children, tone = "error", title }: {
   children: ReactNode;
   tone?: "error" | "success";
+  title?: string;
 }) {
   return (
-    <p
-      role={tone === "error" ? "alert" : "status"}
-      className={`rounded-xl px-3 py-2 text-[13px] leading-5 ${
-        tone === "error"
-          ? "bg-red-500/10 text-red-600 dark:text-red-300"
-          : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-      }`}
-    >
-      {children}
-    </p>
+    <div role={tone === "error" ? "alert" : "status"} className="flex flex-col gap-3 rounded-2xl bg-[var(--hara-auth-field)] p-4 text-left">
+      <div className="flex items-center gap-3">
+        <Image src="/figma/home/notification.svg" alt="" width={24} height={24} className="hara-auth-icon size-6 shrink-0" />
+        <p className="text-[16px] leading-[21px] font-semibold">{title || (tone === "error" ? "Məlumatları yoxlayın" : "Əməliyyat uğurludur")}</p>
+      </div>
+      <div className="text-[15px] leading-5 text-[var(--hara-auth-secondary)]">{children}</div>
+    </div>
   );
 }
 
@@ -168,7 +170,7 @@ export function PasswordRequirements({ password }: { password: string }) {
         <li
           key={label}
           className={`flex items-center gap-2 text-[12px] leading-4 ${
-            met ? "text-[var(--hara-auth-secondary)]" : "text-[var(--hara-auth-muted)]"
+            met ? "text-[var(--hara-auth-secondary)]" : "text-red-600 dark:text-red-300"
           }`}
         >
           <Image

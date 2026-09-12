@@ -24,6 +24,8 @@ import {
   subscribeToAuthChange,
 } from "@/lib/auth/session";
 
+import { clearRegistrationDraft } from "@/lib/registration-draft";
+
 type AuthStatus = "loading" | "authenticated" | "anonymous";
 
 type AuthContextValue = {
@@ -70,6 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     const session = await authApi.login(email, password);
+    clearRegistrationDraft();
     setUser(session.user);
     setStatus("authenticated");
   }, []);
@@ -80,6 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const verifyEmail = useCallback(async (email: string, code: string) => {
     const session = await authApi.verifyEmail(email, code);
+    clearRegistrationDraft();
     setUser(session.user);
     setStatus("authenticated");
   }, []);
@@ -97,7 +101,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         profile,
         nonce,
       );
-      setUser(session.user);
+      clearRegistrationDraft();
+    setUser(session.user);
       setStatus("authenticated");
     },
     [],
@@ -120,6 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    clearRegistrationDraft();
     setLogoutError(null);
     void authApi.logout().catch(() => {
       setLogoutError("Bu cihazdan çıxdınız. Sessiyanın bağlanmasını təsdiqləmək üçün yenidən cəhd edin.");

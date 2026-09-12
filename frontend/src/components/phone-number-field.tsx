@@ -6,7 +6,7 @@ import { formatPhoneDigits, phoneDigitsFromInput, phoneNumberError, PHONE_PREFIX
 
 import { AuthField } from "./auth-ui";
 
-type Props = { value: string; onChange: (value: string) => void; disabled?: boolean };
+type Props = { value: string; onChange: (value: string) => void; disabled?: boolean; showErrors?: boolean };
 
 function digitCount(value: string) {
   return value.replace(/[^0-9]/g, "").length;
@@ -21,12 +21,12 @@ function caretAfterDigits(formatted: string, count: number) {
   return formatted.length;
 }
 
-export function PhoneNumberField({ value, onChange, disabled }: Props) {
+export function PhoneNumberField({ value, onChange, disabled, showErrors = false }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const caretRef = useRef<number | null>(null);
   const [touched, setTouched] = useState(false);
   const formatted = formatPhoneDigits(value);
-  const error = touched || value.length === 9 ? phoneNumberError(value) : null;
+  const error = showErrors || touched || value.length === 9 ? phoneNumberError(value) : null;
 
   useLayoutEffect(() => {
     if (caretRef.current !== null && inputRef.current) {

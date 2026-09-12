@@ -1,3 +1,4 @@
+import { clearRegistrationDraft } from "@/lib/registration-draft";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -38,6 +39,7 @@ const profile = {
 };
 
 beforeEach(() => {
+  clearRegistrationDraft();
   navigation.searchParams = new URLSearchParams();
 });
 
@@ -248,7 +250,7 @@ it("does not submit an invalid phone even if form submission is forced", async (
   render(<AuthProvider><RegistrationForm /></AuthProvider>);
   const phone = screen.getByLabelText("Telefon nömrəsi") as HTMLInputElement;
   fireEvent.change(phone, { target: { value: "123456789" } });
-  expect((screen.getByRole("button", { name: "Qeydiyyatdan keç" }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole("button", { name: "Qeydiyyatdan keç" }) as HTMLButtonElement).disabled).toBe(false);
   await act(async () => fireEvent.submit(phone.form!));
   expect(register).not.toHaveBeenCalled();
 });

@@ -16,7 +16,8 @@ export function phoneDigitsFromInput(value: string): string | null {
   } else if (digits.length === 12 && digits.startsWith("994")) {
     digits = digits.slice(3);
   }
-  return digits.slice(0, 9);
+  if (digits.length === 10 && digits.startsWith("0")) digits = digits.slice(1);
+  return digits.length <= 9 ? digits : null;
 }
 
 export function phoneNumberError(digits: string): string | null {
@@ -24,5 +25,6 @@ export function phoneNumberError(digits: string): string | null {
   if (new Set(digits).size === 1 || "01234567890123456789".includes(digits) || "98765432109876543210".includes(digits)) {
     return "Telefon nömrəsinin bütün rəqəmləri eyni və ya ardıcıl ola bilməz.";
   }
+  if (!/^(10|50|51|55|60|70|77|99)/.test(digits)) return "Azərbaycan mobil nömrəsi daxil edin (10, 50, 51, 55, 60, 70, 77, 99).";
   return null;
 }
