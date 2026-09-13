@@ -119,7 +119,7 @@ describe("event creation authentication entry", () => {
     navigation.searchParams = new URLSearchParams();
     render(tree());
     expect(await screen.findByRole("heading", { name: "Tarix və məkan" })).toBeTruthy();
-    expect(navigation.replace).toHaveBeenCalledWith("/create-event?step=2");
+    await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith("/create-event?step=2"));
   });
 
   it("keeps an incomplete draft on step one even with a step two URL", async () => {
@@ -155,7 +155,7 @@ describe("event creation authentication entry", () => {
     navigation.searchParams = new URLSearchParams("step=3");
     render(<AuthProvider><ProtectedRoute><EventWizard /></ProtectedRoute></AuthProvider>);
     expect(await screen.findByRole("heading", { name: "Tarix və məkan" })).toBeTruthy();
-    expect(navigation.replace).toHaveBeenCalledWith("/create-event?step=2");
+    await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith("/create-event?step=2"));
   });
 
   it("carries the wizard destination through email registration and verification", async () => {

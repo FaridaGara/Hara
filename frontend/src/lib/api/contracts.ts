@@ -30,6 +30,7 @@ export type HaraEvent = {
   end_at: string;
   status: "draft" | "published" | "cancelled" | "completed";
   is_featured: boolean;
+  min_price?: string | null;
 };
 
 export type EventPhoto = {
@@ -243,6 +244,7 @@ export type Ticket = {
 };
 
 export type EventListFilters = {
+  upcoming?: boolean;
   category?: string;
   city?: string;
   featured?: boolean;

@@ -309,6 +309,13 @@ class EventSerializer(serializers.ModelSerializer):
         )
 
 
+class EventDiscoverySerializer(EventSerializer):
+    min_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True, allow_null=True)
+
+    class Meta(EventSerializer.Meta):
+        fields = EventSerializer.Meta.fields + ("min_price",)
+
+
 class EventPhotoSerializer(serializers.ModelSerializer):
     class Meta:
         model = EventPhoto

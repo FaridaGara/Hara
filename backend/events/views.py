@@ -40,6 +40,7 @@ from .models import (
 from .permissions import HasAdminModelPermission, IsOrganizer
 from .serializers import (
     EventDetailSerializer,
+    EventDiscoverySerializer,
     EventSeatingPlanSerializer,
     EventSerializer,
     FavoriteCreateSerializer,
@@ -103,6 +104,12 @@ class VenueChoiceListAPIView(ListAPIView):
         description="Published events. No authentication is required.",
         parameters=[
             OpenApiParameter(
+                "upcoming",
+                str,
+                enum=["true", "false"],
+                description="Set true to exclude events that have ended.",
+            ),
+            OpenApiParameter(
                 "category",
                 str,
                 description="Category slug.",
@@ -119,11 +126,11 @@ class VenueChoiceListAPIView(ListAPIView):
                 description="Filter by featured status.",
             ),
         ],
-        responses={200: EventSerializer(many=True)},
+        responses={200: EventDiscoverySerializer(many=True)},
     )
 )
 class EventListAPIView(ListAPIView):
-    serializer_class = EventSerializer
+    serializer_class = EventDiscoverySerializer
     permission_classes = [AllowAny]
 
     filter_backends = [SearchFilter, OrderingFilter]
@@ -146,7 +153,15 @@ class EventListAPIView(ListAPIView):
                 venue__is_active=True,
             )
             .select_related("category", "venue", "organizer")
+            .annotate(min_price=Subquery(
+                TicketType.objects.filter(event_id=OuterRef("pk"), is_active=True)
+                .filter(Q(venue_section__isnull=True) | Q(venue_section__is_active=True))
+                .order_by("price", "id").values("price")[:1]
+            ))
         )
+
+        if self.request.query_params.get("upcoming") == "true":
+            queryset = queryset.filter(end_at__gt=timezone.now())
 
         category = self.request.query_params.get("category")
         city = self.request.query_params.get("city")
