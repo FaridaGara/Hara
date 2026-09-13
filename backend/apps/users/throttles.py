@@ -12,7 +12,7 @@ from rest_framework.exceptions import Throttled
 from rest_framework.throttling import BaseThrottle
 
 from .login_identifiers import find_login_user, normalize_phone
-from .models import LoginRateLimit
+from .models import LoginRateLimit, User
 
 
 class LoginThrottled(Throttled):
@@ -25,9 +25,10 @@ class LoginThrottled(Throttled):
 
 
 class VerificationSendThrottled(Throttled):
-    def __init__(self, wait):
+    def __init__(self, wait, scope="email"):
         super().__init__(wait=wait)
         self.detail = {
+            "rate_limit_scope": scope,
             "detail": "Kod göndərmə limiti bitib. Göstərilən müddətdən sonra yenidən cəhd edin.",
             "retry_after": self.wait,
         }
@@ -201,6 +202,7 @@ class VerificationSendThrottle(BaseThrottle):
         self.retry_after = 0
         if request.method != "POST":
             return True
+        view.verification_throttle_scope = "ip"
         # Shared across registration, resend and reset, before any user lookup.
         self.retry_after = consume_attempt(
             "verification-send-ip", client_ip(request),
@@ -215,8 +217,25 @@ class VerificationSendThrottle(BaseThrottle):
             ).strip().casefold()
         except serializers.ValidationError:
             return True  # Invalid bodies still spend the IP budget.
-        self.retry_after = reserve_verification_send(email)
+        view.verification_throttle_scope = "email"
+        self.retry_after = self.reserve_email(email)
         return not self.retry_after
 
     def wait(self):
         return self.retry_after
+
+    def reserve_email(self, email):
+        return reserve_verification_send(email)
+
+
+class RegistrationSendThrottle(VerificationSendThrottle):
+    def reserve_email(self, email):
+        # IP protection still runs first. Existing accounts do not send mail or
+        # consume email delivery budgets, including when a cooldown is active.
+        if User.objects.filter(email__iexact=email, is_active=True).exists():
+            raise serializers.ValidationError({
+                "detail": "Bu e-poçtla artıq hesab mövcuddur. Hesabınıza daxil olun.",
+                "email": ["Bu e-poçtla artıq hesab mövcuddur."],
+                "code": "email_exists",
+            })
+        return super().reserve_email(email)
