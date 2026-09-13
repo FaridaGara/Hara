@@ -22,7 +22,7 @@ export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { status, login } = useAuth();
-  const [identifier, setIdentifier] = useState("");
+  const [identifier, setIdentifier] = useState(() => searchParams.get("email") || "");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -1,4 +1,5 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { ApiError } from "@/lib/api";
+import { act, render, screen, fireEvent } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { RegistrationForm } from "./registration-form";
 import { clearRegistrationDraft, readRegistrationDraft } from "@/lib/registration-draft";
@@ -46,4 +47,33 @@ it("accepts Azerbaijani mobile prefixes and rejects bogus numbers", () => {
   for (const number of ["9941923235", "197569083", "123456789", "50756908"]) expect(phoneNumberError(number)).toBeTruthy();
   expect(phoneDigitsFromInput("+994 50 756 90 83")).toBe("507569083");
   expect(phoneDigitsFromInput("9941923235")).toBeNull();
+});
+
+async function submitCompleteForm() {
+  for (const [name, value] of [["Ad", "Aysel"], ["Soyad", "Əliyeva"], ["E-poçt", "aysel@example.com"], ["Telefon nömrəsi", "507569083"], ["Şifrə", "Təhlükəsiz77"], ["Şifrəni təkrarla", "Təhlükəsiz77"]]) {
+    fireEvent.change(screen.getByLabelText(name), {target: {value}});
+  }
+  fireEvent.click(screen.getByRole("checkbox"));
+  await act(async () => fireEvent.click(screen.getByRole("button", {name: "Qeydiyyatdan keç"})));
+}
+
+it("offers login for an existing email and permits a different email", async () => {
+  register.mockRejectedValue(new ApiError({kind: "http", status: 400, message: "Bu e-poçtla artıq hesab mövcuddur.", payload: {code: "email_exists"}}));
+  render(<RegistrationForm />);
+  await submitCompleteForm();
+  expect(screen.getByRole("link", {name: "Hesabına daxil ol"}).getAttribute("href")).toContain("email=aysel%40example.com");
+  fireEvent.change(screen.getByLabelText("E-poçt"), {target: {value: "other@example.com"}});
+  expect((screen.getByRole("button", {name: "Qeydiyyatdan keç"}) as HTMLButtonElement).disabled).toBe(false);
+  expect(screen.queryByRole("link", {name: "Hesabına daxil ol"})).toBeNull();
+});
+it.each(["email", "ip"])("handles %s cooldown when the email changes", async (scope) => {
+  register.mockRejectedValue(new ApiError({kind: "http", status: 429, message: "Limit", payload: {retry_after: 600, rate_limit_scope: scope}}));
+  render(<RegistrationForm />);
+  await submitCompleteForm();
+  const button = screen.getByRole("button", {name: "Qeydiyyatdan keç"}) as HTMLButtonElement;
+  expect(button.disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText("E-poçt"), {target: {value: "other@example.com"}});
+  expect(button.disabled).toBe(scope === "ip");
+  fireEvent.change(screen.getByLabelText("E-poçt"), {target: {value: "AYSEL@example.com"}});
+  expect(button.disabled).toBe(true);
 });

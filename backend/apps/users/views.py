@@ -25,7 +25,7 @@ from .social_auth import SocialTokenError, verify_apple_token, verify_google_tok
 from .throttles import (
     CredentialsLoginThrottle, LoginThrottled, SocialLoginThrottle,
     VerificationAttemptThrottle, VerificationAttemptThrottled,
-    VerificationSendThrottle, VerificationSendThrottled,
+    VerificationSendThrottle, VerificationSendThrottled, RegistrationSendThrottle,
 )
 from .verification import (
     VerificationError,
@@ -138,7 +138,7 @@ def resolve_social_user(provider, claims, supplied_first_name="", supplied_last_
 def verification_error_response(exc):
     if isinstance(exc, VerificationRateLimited):
         return Response(
-            {"detail": str(exc), "retry_after": exc.retry_after},
+            {"detail": str(exc), "retry_after": exc.retry_after, "rate_limit_scope": "email"},
             status=status.HTTP_429_TOO_MANY_REQUESTS,
             headers={"Retry-After": str(exc.retry_after)},
         )
@@ -182,7 +182,7 @@ class VerificationSendAPIView(APIView):
     throttle_classes = [VerificationSendThrottle]
 
     def throttled(self, request, wait):
-        raise VerificationSendThrottled(wait)
+        raise VerificationSendThrottled(wait, getattr(self, "verification_throttle_scope", "ip"))
 
     def handle_exception(self, exc):
         if isinstance(exc, EmailDeliveryError):
@@ -204,6 +204,7 @@ class VerificationSendAPIView(APIView):
     )
 )
 class RegistrationAPIView(VerificationSendAPIView):
+    throttle_classes = [RegistrationSendThrottle]
 
     def post(self, request):
         serializer = RegistrationSerializer(data=request.data)

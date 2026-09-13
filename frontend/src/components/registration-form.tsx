@@ -34,12 +34,18 @@ export function RegistrationForm() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const retry = useRetryCountdown();
+  const [limitedEmail, setLimitedEmail] = useState<string | null>(null);
+  const [existingEmail, setExistingEmail] = useState<string | null>(null);
+  const normalizedEmail = email.trim().toLowerCase();
+  const remaining = limitedEmail === null || limitedEmail === normalizedEmail ? retry.remaining : 0;
+  const emailExists = existingEmail === normalizedEmail;
+  const loginHref = authHref(`/login?email=${encodeURIComponent(email.trim())}`, next);
   const [attempted, setAttempted] = useState(false);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const errors: Record<string, string | null> = {
     first_name: firstName.trim() ? null : "Adınızı daxil edin.",
     last_name: lastName.trim() ? null : "Soyadınızı daxil edin.",
-    email: emailError(email),
+    email: emailExists ? "Bu e-poçtla artıq hesab mövcuddur." : emailError(email),
     phone_number: phoneNumberError(phone),
     password: password ? passwordErrors(password).join(" ") || null : "Şifrəni daxil edin.",
     password_confirm: !passwordConfirm ? "Şifrəni təkrarlayın." : password !== passwordConfirm ? "Şifrələr eyni deyil." : null,
@@ -56,7 +62,7 @@ export function RegistrationForm() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (submitting || retry.remaining > 0) return;
+    if (submitting || remaining > 0 || emailExists) return;
     setAttempted(true);
     if (Object.values(errors).some(Boolean)) {
       setError("Məlumatları tamamlayın və işarələnmiş sahələri yoxlayın.");
@@ -82,7 +88,13 @@ export function RegistrationForm() {
         authHref(`/verify?purpose=registration&email=${encodeURIComponent(verificationEmail)}&retry_after=${retryAfterSeconds(response)}`, next),
       );
     } catch (caughtError) {
+      const payload = caughtError instanceof ApiError && caughtError.payload && typeof caughtError.payload === "object"
+        ? caughtError.payload as Record<string, unknown> : {};
+      if (payload.code === "email_exists") {
+        setExistingEmail(normalizedEmail);
+      }
       if (caughtError instanceof ApiError && caughtError.status === 429) {
+        setLimitedEmail(payload.rate_limit_scope === "email" ? normalizedEmail : null);
         retry.start(retryAfterSeconds(caughtError.payload));
       }
       setError(
@@ -146,7 +158,10 @@ export function RegistrationForm() {
           autoComplete="email"
           required
           value={email}
-          onChange={(event) => setEmail(event.target.value)}
+          onChange={(event) => {
+            if (event.target.value.trim().toLowerCase() !== normalizedEmail) setError(null);
+            setEmail(event.target.value);
+          }}
           disabled={submitting}
         />
         <PhoneNumberField showErrors={attempted} value={phone} onChange={setPhone} disabled={submitting} />
@@ -194,8 +209,9 @@ export function RegistrationForm() {
         </label>
         {fieldError("accept_terms") ? <p className="text-[12px] text-red-600 dark:text-red-300">{errors.accept_terms}</p> : null}
         {error ? <AuthMessage>{error}</AuthMessage> : null}
-        {retry.remaining > 0 ? <p role="status" className="text-sm text-[var(--hara-auth-secondary)]">Yenidən cəhd üçün {retry.remaining} saniyə gözləyin.</p> : null}
-        <AuthButton type="submit" disabled={submitting || retry.remaining > 0}>
+        {emailExists ? <Link href={loginHref} className="rounded-2xl bg-[#565dd8]/10 px-4 py-3 text-center font-semibold text-[#4e55c5]">Hesabına daxil ol</Link> : null}
+        {remaining > 0 ? <p role="status" className="text-sm text-[var(--hara-auth-secondary)]">Yenidən cəhd üçün {remaining} saniyə gözləyin.</p> : null}
+        <AuthButton type="submit" disabled={submitting || remaining > 0 || emailExists}>
           {submitting ? "Hesab yaradılır…" : "Qeydiyyatdan keç"}
         </AuthButton>
       </form>
