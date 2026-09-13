@@ -6,7 +6,7 @@ import { ApiError } from "@/lib/api";
 import { eventFixture } from "@/test/fixtures";
 
 import { FavoritesProvider } from "./favorites-provider";
-import { HaraHome } from "./hara-home";
+import { HaraHome, NearbyMapCard } from "./hara-home";
 
 const apiMocks = vi.hoisted(() => ({
   list: vi.fn(),
@@ -35,6 +35,7 @@ vi.mock("./auth-provider", () => ({
 
 describe("Hara home", () => {
   beforeEach(() => {
+    vi.setSystemTime(new Date("2026-08-10T08:00:00Z"));
     push.mockClear();
     apiMocks.list.mockReset().mockResolvedValue([]);
     apiMocks.add.mockReset().mockResolvedValue(eventFixture);
@@ -61,13 +62,13 @@ describe("Hara home", () => {
     const loadEvents = vi.fn().mockResolvedValue([eventFixture, secondEvent]);
     renderHome(loadEvents);
 
-    expect(screen.getByText("Tədbirlər yüklənir…")).toBeTruthy();
+    expect(screen.getAllByText("Tədbirlər yüklənir…").length).toBeGreaterThan(0);
     expect(await screen.findAllByText(eventFixture.title)).toHaveLength(2);
     expect(screen.getAllByText(secondEvent.title)).toHaveLength(2);
     expect(screen.getAllByRole("link", { name: eventFixture.title })[0].getAttribute("href"))
       .toBe(`/events/${eventFixture.slug}`);
     expect(loadEvents).toHaveBeenCalledWith(
-      { ordering: "start_at" },
+      { ordering: "start_at", upcoming: true },
       expect.any(AbortSignal),
     );
   });
@@ -99,7 +100,7 @@ describe("Hara home", () => {
 
     await waitFor(() =>
       expect(loadEvents).toHaveBeenLastCalledWith(
-        { ordering: "start_at", search: "caz" },
+        { ordering: "start_at", upcoming: true, search: "caz" },
         expect.any(AbortSignal),
       ),
     );
@@ -176,4 +177,61 @@ describe("Hara home", () => {
     expect(screen.getByRole("link", { name: "Sevimlilər" }).textContent).toBe("1");
     await waitFor(() => expect(apiMocks.add).toHaveBeenCalledWith(eventFixture.id));
   });
+  it("opens real filters and filters using database category and price", async () => {
+    const free = {...eventFixture, id: "free", slug: "free", title: "Ödənişsiz sərgi", min_price: "0.00", category: {id: 9, slug: "art", name: "Sərgi"}};
+    renderHome(vi.fn().mockResolvedValue([eventFixture, free]));
+    await screen.findAllByText(free.title);
+    await userEvent.click(screen.getByRole("button", {name: "Filterləri aç"}));
+    await userEvent.selectOptions(screen.getByLabelText("Bilet qiyməti"), "free");
+    expect(screen.queryByText(eventFixture.title)).toBeNull();
+    expect(screen.getAllByText(free.title)).toHaveLength(2);
+    await userEvent.selectOptions(screen.getByLabelText("Kateqoriya"), "musiqi");
+    expect(screen.getByText("Uyğun tədbir tapılmadı.")).toBeTruthy();
+  });
+
+  it("clearing search restores the unfiltered request and never shows 14 fake events", async () => {
+    const load = vi.fn().mockResolvedValueOnce([eventFixture]).mockResolvedValueOnce([]).mockResolvedValue([eventFixture]);
+    renderHome(load);
+    await screen.findAllByText(eventFixture.title);
+    const input = screen.getByRole("searchbox");
+    fireEvent.change(input, {target: {value: "missing"}});
+    await userEvent.click(screen.getByRole("button", {name: "Axtar"}));
+    await screen.findByText("Uyğun tədbir tapılmadı.");
+    expect(screen.queryByText(/14 tədbir/)).toBeNull();
+    fireEvent.change(input, {target: {value: ""}});
+    await screen.findAllByText(eventFixture.title);
+    expect(load).toHaveBeenLastCalledWith({ordering: "start_at", upcoming: true}, expect.any(AbortSignal));
+    expect(screen.getByRole("link", {name: "Xəritədə gör"}).getAttribute("href")).toBe("/map");
+  });
+
+  it("excludes past events and keeps later events out of the weekly section", async () => {
+    const later = {...eventFixture, id: "later", title: "Next week", start_at: "2026-08-19T10:00:00Z", end_at: "2026-08-19T12:00:00Z"};
+    const past = {...eventFixture, id: "past", title: "Old event", start_at: "2026-08-01T10:00:00Z", end_at: "2026-08-01T12:00:00Z"};
+    renderHome(vi.fn().mockResolvedValue([eventFixture, later, past]));
+    await screen.findAllByText(eventFixture.title);
+    expect(screen.getAllByText(later.title)).toHaveLength(1);
+    expect(screen.queryByText(past.title)).toBeNull();
+  });
+
+  it("only counts real nearby events after permission and shows permission failures", async () => {
+    const getCurrentPosition = vi.fn()
+      .mockImplementationOnce((_success, failure) => failure({code: 1}))
+      .mockImplementationOnce((success) => success({coords: {latitude: 40.4, longitude: 49.8}}));
+    Object.defineProperty(navigator, "geolocation", {configurable: true, value: {getCurrentPosition}});
+    const near = {...eventFixture, venue: {...eventFixture.venue, latitude: 40.4, longitude: 49.8}};
+    const far = {...eventFixture, id: "far", venue: {...eventFixture.venue, latitude: 41.4, longitude: 49.8}};
+    const load = vi.fn().mockResolvedValue([near, far]);
+    render(<NearbyMapCard loadEvents={load} />);
+    expect(load).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", {name: "Məkanımı seç"}));
+    expect(screen.getByRole("alert").textContent).toContain("İcazəni yoxlayıb");
+    expect(load).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", {name: "Məkanımı seç"}));
+    await screen.findByText("5 km radiusda 1 tədbir tapıldı");
+    expect(load).toHaveBeenCalledWith({ordering: "start_at", upcoming: true}, expect.any(AbortSignal));
+    expect(screen.getByRole("link", {name: "Xəritədə gör"}).getAttribute("href"))
+      .toBe("/map?lat=40.4&lon=49.8&radius=5");
+    Reflect.deleteProperty(navigator, "geolocation");
+  });
+
 });

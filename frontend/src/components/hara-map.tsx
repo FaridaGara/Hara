@@ -4,7 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
-import { ApiError, eventsApi, type HaraEvent, type PublicTicketType } from "@/lib/api";
+import { ApiError, eventsApi, type HaraEvent, type EventListFilters } from "@/lib/api";
+import { eventPrice, eventPriceValue, isNearby } from "@/lib/event-discovery";
 import { formatBakuDate, safePosterUrl } from "@/lib/format";
 
 import { useFavorites } from "./favorites-provider";
@@ -12,7 +13,7 @@ import { GoogleEventMap } from "./google-event-map";
 import { MobileTabBar } from "./mobile-tab-bar";
 
 type LoadEvents = (
-  filters?: { ordering?: "start_at" },
+  filters?: EventListFilters,
   signal?: AbortSignal,
 ) => Promise<HaraEvent[]>;
 
@@ -23,7 +24,6 @@ type MapMode =
 
 type ViewMode = "map" | "list";
 
-type EventWithTickets = HaraEvent & { ticket_types?: PublicTicketType[] };
 
 type DateFilter = "today" | "week" | "month" | "custom";
 
@@ -67,30 +67,10 @@ const CLOSE_PINS = [
 
 const BAKU_OFFSET_MS = 4 * 60 * 60 * 1000;
 
-function eventPrice(event: HaraEvent) {
-  const tickets = (event as EventWithTickets).ticket_types;
-  const cheapest = tickets
-    ?.filter((ticket) => Number.isFinite(Number(ticket.price)))
-    .sort((a, b) => Number(a.price) - Number(b.price))[0];
-
-  if (!cheapest) return "15 AZN-dən";
-  const price = Number(cheapest.price);
-  const displayedPrice = Number.isInteger(price) ? String(price) : price.toFixed(2);
-  return `${displayedPrice} ${cheapest.currency}-dən`;
-}
-
-function eventPriceValue(event: HaraEvent) {
-  const tickets = (event as EventWithTickets).ticket_types;
-  const prices = tickets
-    ?.map((ticket) => Number(ticket.price))
-    .filter((price) => Number.isFinite(price));
-  return prices?.length ? Math.min(...prices) : 15;
-}
-
 function matchesAdvancedFilters(event: HaraEvent, filters: AdvancedFilters) {
   const price = eventPriceValue(event);
   const matchesPrice =
-    price >= filters.minPrice && (filters.maxPrice === 200 || price <= filters.maxPrice);
+    (filters.minPrice === 0 && filters.maxPrice === 200) || (price !== null && price >= filters.minPrice && (filters.maxPrice === 200 || price <= filters.maxPrice));
 
   if (!matchesPrice || !filters.date) return matchesPrice;
 
@@ -514,16 +494,20 @@ export function HaraMap({ loadEvents = eventsApi.list }: { loadEvents?: LoadEven
 
   useEffect(() => {
     const controller = new AbortController();
-    loadEvents({ ordering: "start_at" }, controller.signal)
+    const params = new URLSearchParams(window.location.search);
+    const lat = Number(params.get("lat")), lon = Number(params.get("lon"));
+    const nearby = params.has("lat") && params.has("lon") && params.get("radius") === "5" && Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? {latitude: lat, longitude: lon} : null;
+    loadEvents({ ordering: "start_at", upcoming: true }, controller.signal)
       .then((result) => {
-        setEvents(result);
+        if (controller.signal.aborted) return;
+        setEvents(nearby ? result.filter((event) => isNearby(event, nearby)) : result);
         setError("");
       })
       .catch((reason) => {
-        if (reason instanceof ApiError && reason.kind === "cancelled") return;
+        if (controller.signal.aborted || (reason instanceof ApiError && reason.kind === "cancelled")) return;
         setError(reason instanceof ApiError ? reason.message : "Tədbirləri yükləmək mümkün olmadı.");
       })
-      .finally(() => setLoading(false));
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
 
     return () => controller.abort();
   }, [loadEvents]);

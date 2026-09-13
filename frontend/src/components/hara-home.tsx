@@ -9,9 +9,11 @@ import {
   ApiError,
   eventsApi,
   type HaraEvent,
-  type PublicTicketType,
+  type EventListFilters,
 } from "@/lib/api";
-import { formatBakuDate, safePosterUrl } from "@/lib/format";
+import { formatBakuDate, safeEventImageUrl } from "@/lib/format";
+
+import { eventPrice, eventPriceValue, isNearby, matchesPeriod, type Coordinates, type DiscoveryPeriod } from "@/lib/event-discovery";
 
 import { useAuth } from "./auth-provider";
 import { useFavorites } from "./favorites-provider";
@@ -19,7 +21,7 @@ import { MobileTabBar } from "./mobile-tab-bar";
 import { HomeAddButton } from "./home-add-button";
 
 type LoadEvents = (
-  filters?: { search?: string; ordering?: "start_at" },
+  filters?: EventListFilters,
   signal?: AbortSignal,
 ) => Promise<HaraEvent[]>;
 
@@ -27,20 +29,6 @@ type HomeState =
   | { kind: "loading" }
   | { kind: "success"; events: HaraEvent[] }
   | { kind: "error"; message: string };
-
-type EventWithTickets = HaraEvent & { ticket_types?: PublicTicketType[] };
-
-function eventPrice(event: HaraEvent, from = false) {
-  const tickets = (event as EventWithTickets).ticket_types;
-  const cheapest = tickets
-    ?.filter((ticket) => Number.isFinite(Number(ticket.price)))
-    .sort((a, b) => Number(a.price) - Number(b.price))[0];
-
-  if (!cheapest) return from ? "15 AZN-dən" : "15 AZN";
-  const price = Number(cheapest.price);
-  const displayedPrice = Number.isInteger(price) ? String(price) : price.toFixed(2);
-  return `${displayedPrice} ${cheapest.currency}${from ? "-dən" : ""}`;
-}
 
 function EventImage({
   event,
@@ -51,7 +39,7 @@ function EventImage({
   fallback: string;
   priority?: boolean;
 }) {
-  const src = safePosterUrl(event.cover_image_url) ?? fallback;
+  const src = safeEventImageUrl(event.cover_image_url) ?? fallback;
 
   return (
     // API poster origins are intentionally unrestricted, so a finite Next Image allowlist is not possible.
@@ -59,6 +47,7 @@ function EventImage({
     <img
       src={src}
       alt=""
+      onError={(error) => { error.currentTarget.onerror = null; error.currentTarget.src = fallback; }}
       loading={priority ? "eager" : "lazy"}
       fetchPriority={priority ? "high" : "auto"}
       className="absolute inset-0 h-full w-full object-cover"
@@ -191,37 +180,30 @@ export function Header() {
   );
 }
 
-export function SearchBar({ onSearch }: { onSearch: (query: string) => void }) {
+export function SearchBar({ onSearch, onFilter, filterOpen, filterCount = 0 }: {
+  onSearch: (query: string) => void;
+  onFilter: () => void;
+  filterOpen: boolean;
+  filterCount?: number;
+}) {
   const [query, setQuery] = useState("");
-
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    onSearch(query.trim());
-  };
-
+  const submit = (event: FormEvent) => { event.preventDefault(); onSearch(query.trim()); };
   return (
     <form role="search" onSubmit={submit} className="flex h-[72px] gap-2 px-4 py-3">
-      <label className="flex h-12 min-w-0 flex-1 items-center gap-2 rounded-3xl bg-[var(--hara-surface)] px-3">
-        <span className="sr-only">Tədbir axtar</span>
-        <Image src="/figma/home/search.svg" alt="" width={24} height={24} />
-        <input
-          type="search"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
+      <div className="flex h-12 min-w-0 flex-1 items-center gap-2 rounded-3xl bg-[var(--hara-surface)] px-3 focus-within:ring-2 focus-within:ring-[#565dd8]">
+        <button type="submit" aria-label="Axtar" className="grid size-8 shrink-0 place-items-center">
+          <Image src="/figma/home/search.svg" alt="" width={24} height={24} />
+        </button>
+        <label htmlFor="home-search" className="sr-only">Tədbir axtar</label>
+        <input id="home-search" type="search" value={query}
+          onChange={(event) => { const value = event.target.value; setQuery(value); if (!value.trim()) onSearch(""); }}
           placeholder="Caz, rooftop, sərgi..."
-          className="min-w-0 flex-1 bg-transparent text-[15px] leading-5 tracking-[-0.23px] text-[var(--hara-secondary)] outline-none placeholder:text-[var(--hara-muted)]"
-        />
-      </label>
-      <button
-        type="submit"
-        className="grid size-12 shrink-0 place-items-center rounded-full bg-[var(--hara-surface)] transition active:scale-95"
-        aria-label="Axtar"
-      >
-        <AdaptiveIcon
-          lightSrc="/figma/home/filter.svg"
-          darkSrc="/figma/home-dark/filter.svg"
-          size={24}
-        />
+          className="min-w-0 flex-1 bg-transparent text-[15px] leading-5 text-[var(--hara-secondary)] outline-none placeholder:text-[var(--hara-muted)]" />
+      </div>
+      <button type="button" aria-label="Filterləri aç" aria-expanded={filterOpen} aria-controls="home-filters" onClick={onFilter}
+        className="relative grid size-12 shrink-0 place-items-center rounded-full bg-[var(--hara-surface)] focus-visible:outline-2 focus-visible:outline-[#565dd8]">
+        <AdaptiveIcon lightSrc="/figma/home/filter.svg" darkSrc="/figma/home-dark/filter.svg" size={24} />
+        {filterCount > 0 ? <span className="absolute right-0 top-0 rounded-full bg-[#565dd8] px-1.5 text-xs text-white">{filterCount}</span> : null}
       </button>
     </form>
   );
@@ -229,7 +211,6 @@ export function SearchBar({ onSearch }: { onSearch: (query: string) => void }) {
 
 export function FeaturedEventCard({
   event,
-  index,
   priority = false,
 }: {
   event: HaraEvent;
@@ -238,7 +219,7 @@ export function FeaturedEventCard({
 }) {
   return (
     <article className="relative h-[200px] w-[324px] shrink-0 snap-start overflow-hidden rounded-tl-3xl rounded-tr-lg rounded-br-3xl rounded-bl-lg bg-[#111] text-white">
-      <EventImage event={event} fallback={index % 2 ? "/figma/networking.png" : "/figma/jazz.png"} priority={priority} />
+      <EventImage event={event} fallback="/figma/home/hara-logo-32.svg" priority={priority} />
       <div className="absolute inset-0 bg-gradient-to-b from-transparent from-30% to-[rgba(12,12,16,.85)]" />
       <div className="relative flex items-center justify-between p-3">
         <span className="rounded-lg bg-[#565dd8]/20 px-2 py-1 text-xs leading-4 text-white">
@@ -246,15 +227,9 @@ export function FeaturedEventCard({
         </span>
         <FavoriteButton event={event} light />
       </div>
-      <div className="absolute right-3 bottom-3 left-3">
-        <h2 className="line-clamp-2 text-[20px] leading-[25px] font-semibold tracking-[-0.45px]">
-          <Link
-            href={`/events/${encodeURIComponent(event.slug)}`}
-            className="after:absolute after:inset-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#98ff00]"
-          >
-            {event.title}
-          </Link>
-        </h2>
+      <Link href={`/events/${encodeURIComponent(event.slug)}`} aria-label={event.title} className="absolute inset-0 z-[1] focus-visible:outline-2 focus-visible:outline-offset-[-4px] focus-visible:outline-[#98ff00]" />
+      <div className="pointer-events-none absolute right-3 bottom-3 left-3">
+        <h2 className="line-clamp-2 text-[20px] leading-[25px] font-semibold tracking-[-0.45px]">{event.title}</h2>
         <div className="mt-1 flex items-center justify-between gap-2">
           <p className="min-w-0 flex-1 truncate text-xs leading-4 text-white/65">
             {formatBakuDate(event.start_at, true)}
@@ -268,7 +243,36 @@ export function FeaturedEventCard({
   );
 }
 
-export function NearbyMapCard({ count }: { count: number }) {
+export function NearbyMapCard({ loadEvents = eventsApi.list }: { loadEvents?: LoadEvents }) {
+  const [state, setState] = useState<HomeState>({ kind: "loading" });
+  const [position, setPosition] = useState<Coordinates | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    if (!position) return;
+    const controller = new AbortController();
+    loadEvents({ ordering: "start_at", upcoming: true }, controller.signal)
+      .then((events) => {
+        if (!controller.signal.aborted) setState({ kind: "success", events });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setState({ kind: "error", message: "Tədbir məlumatları əlçatan deyil" });
+      });
+    return () => controller.abort();
+  }, [loadEvents, position]);
+  const count = position && state.kind === "success"
+    ? state.events.filter((event) => matchesPeriod(event, "all") && isNearby(event, position)).length : null;
+  const mapHref = position ? `/map?lat=${position.latitude}&lon=${position.longitude}&radius=5` : "/map";
+  const locate = () => {
+    if (locating) return;
+    if (!navigator.geolocation) { setError("Bu cihaz məkan məlumatını dəstəkləmir."); return; }
+    setLocating(true); setError("");
+    navigator.geolocation.getCurrentPosition(
+      ({coords}) => { setState({ kind: "loading" }); setPosition({latitude: coords.latitude, longitude: coords.longitude}); setLocating(false); },
+      () => { setError("Məkan müəyyən edilmədi. İcazəni yoxlayıb yenidən cəhd edin."); setLocating(false); },
+      {timeout: 10000, maximumAge: 60000},
+    );
+  };
   return (
     <section id="nearby-map" className="px-4 py-3" aria-labelledby="map-heading">
       <div className="relative h-[150px] overflow-hidden rounded-[20px] border border-[#e5e7eb] bg-white p-5 shadow-[0_4px_12px_rgba(0,0,0,.05)]">
@@ -280,29 +284,33 @@ export function NearbyMapCard({ count }: { count: number }) {
         <Image className="absolute top-[70px] right-[48px]" src="/figma/home/map-dot-md.svg" alt="" width={22} height={22} />
         <Image className="absolute top-[42px] right-[18px]" src="/figma/home/map-dot-lg.svg" alt="" width={28} height={28} />
         <Image className="absolute top-[82px] right-[8px]" src="/figma/home/map-dot-sm.svg" alt="" width={20} height={20} />
-        <div className="relative whitespace-nowrap">
+        <div className="relative">
           <h2 id="map-heading" className="text-[18px] leading-6 font-bold text-[#18181a] min-[360px]:text-[20px]">
             Ətrafımda nə verir baş?
           </h2>
-          <p className="mt-1 text-sm leading-5 text-black/65">Yaxında olan {count} tədbirə göz at</p>
+          <p role="status" className="mt-1 max-w-[280px] text-xs leading-4 text-black/65">{!position ? "Yaxın tədbirləri tapmaq üçün məkanını seç" : state.kind === "loading" ? "Tədbirlər yüklənir…" : state.kind === "error" ? state.message : `5 km radiusda ${count} tədbir tapıldı`}</p>
         </div>
-        <a
-          href="#weekly-events"
-          className="absolute bottom-5 left-5 flex h-9 items-center gap-1 rounded-full bg-[#98ff00] px-3.5 text-[16px] font-bold text-[#18181a] transition active:scale-95"
+        <div className="absolute inset-x-4 bottom-4 flex items-center justify-between gap-2">
+        <Link
+          href={mapHref}
+          className="flex h-9 shrink-0 items-center gap-1 rounded-full bg-[#98ff00] px-3 text-sm font-bold text-[#18181a] transition active:scale-95"
         >
           Xəritədə gör
           <Image src="/figma/home/arrow-right.svg" alt="" width={13} height={13} />
-        </a>
+        </Link>
+        <button type="button" disabled={locating} onClick={locate} className="min-h-9 rounded-full bg-white/95 px-3 py-2 text-xs font-semibold text-[#4e55c5] disabled:opacity-50">{locating ? "Axtarılır…" : position ? "Məkanı yenilə" : "Məkanımı seç"}</button>
+        </div>
       </div>
+      {error ? <p role="alert" className="pt-2 text-xs text-red-600 dark:text-red-300">{error}</p> : null}
     </section>
   );
 }
 
-export function EventRow({ event, index }: { event: HaraEvent; index: number }) {
+export function EventRow({ event }: { event: HaraEvent; index: number }) {
   return (
     <article className="relative flex h-[136px] gap-3 overflow-hidden">
       <div className="relative size-[120px] shrink-0 overflow-hidden rounded-3xl bg-[#111]">
-        <EventImage event={event} fallback={index % 2 ? "/figma/networking.png" : "/figma/jazz.png"} />
+        <EventImage event={event} fallback="/figma/home/hara-logo-32.svg" />
       </div>
       <div className="flex min-w-0 flex-1 flex-col border-b border-[var(--hara-divider)]">
         <div className="flex h-10 items-start gap-2">
@@ -330,18 +338,29 @@ export function EventRow({ event, index }: { event: HaraEvent; index: number }) 
 
 export function HaraHome({ loadEvents = eventsApi.list }: { loadEvents?: LoadEvents }) {
   const [search, setSearch] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [category, setCategory] = useState("");
+  const [period, setPeriod] = useState<DiscoveryPeriod>("all");
+  const [price, setPrice] = useState("all");
+  const [categories, setCategories] = useState<HaraEvent["category"][]>([]);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 60000); return () => window.clearInterval(timer); }, []);
   const [retryKey, setRetryKey] = useState(0);
   const [state, setState] = useState<HomeState>({ kind: "loading" });
 
   useEffect(() => {
     const controller = new AbortController();
     loadEvents(
-      { ordering: "start_at", ...(search ? { search } : {}) },
+      { ordering: "start_at", upcoming: true, ...(search ? { search } : {}) },
       controller.signal,
     )
-      .then((events) => setState({ kind: "success", events }))
+      .then((events) => {
+        if (controller.signal.aborted) return;
+        setState({ kind: "success", events });
+        setCategories((previous) => [...new Map([...previous, ...events.map((event) => event.category)].map((item) => [item.slug, item])).values()]);
+      })
       .catch((error) => {
-        if (error instanceof ApiError && error.kind === "cancelled") return;
+        if (controller.signal.aborted || (error instanceof ApiError && error.kind === "cancelled")) return;
         setState({
           kind: "error",
           message: error instanceof ApiError ? error.message : "Tədbirləri yükləmək mümkün olmadı.",
@@ -350,7 +369,14 @@ export function HaraHome({ loadEvents = eventsApi.list }: { loadEvents?: LoadEve
     return () => controller.abort();
   }, [loadEvents, retryKey, search]);
 
-  const events = state.kind === "success" ? state.events : [];
+  const allEvents = state.kind === "success" ? state.events.filter((event) => matchesPeriod(event, "all", now)) : [];
+  const events = allEvents.filter((event) => {
+    const amount = eventPriceValue(event);
+    return (!category || event.category.slug === category) && matchesPeriod(event, period, now) &&
+      (price === "all" || (amount !== null && (price === "free" ? amount === 0 : amount > 0)));
+  });
+  const weeklyEvents = events.filter((event) => matchesPeriod(event, "week", now));
+  const filterCount = Number(Boolean(category)) + Number(period !== "all") + Number(price !== "all");
   const featured = events.filter((event) => event.is_featured);
   const featuredEvents = [...featured, ...events.filter((event) => !event.is_featured)];
 
@@ -363,7 +389,14 @@ export function HaraHome({ loadEvents = eventsApi.list }: { loadEvents?: LoadEve
   return (
     <main className="hara-home relative mx-auto min-h-dvh w-full max-w-[402px] overflow-x-hidden pb-[calc(150px+var(--hara-safe-bottom))] transition-colors sm:my-6 sm:min-h-[calc(100dvh-48px)] sm:rounded-[32px]">
       <Header />
-      <SearchBar onSearch={searchAgain} />
+      <SearchBar onSearch={searchAgain} onFilter={() => setFilterOpen((open) => !open)} filterOpen={filterOpen} filterCount={filterCount} />
+      {filterOpen ? <section id="home-filters" aria-label="Tədbir filtrləri" className="mx-4 mb-3 grid gap-3 rounded-2xl bg-[var(--hara-surface)] p-4 text-sm text-[var(--hara-primary)]">
+        <label className="grid gap-1">Kateqoriya<select value={category} onChange={(event) => setCategory(event.target.value)} className="min-h-11 rounded-xl bg-[var(--hara-surface)] px-3"><option value="">Hamısı</option>{categories.map((item) => <option key={item.slug} value={item.slug}>{item.name}</option>)}</select></label>
+        <label className="grid gap-1">Tarix<select value={period} onChange={(event) => setPeriod(event.target.value as DiscoveryPeriod)} className="min-h-11 rounded-xl bg-[var(--hara-surface)] px-3"><option value="all">Bütün gələcək tədbirlər</option><option value="today">Bu gün</option><option value="week">Bu həftə</option><option value="month">Bu ay</option></select></label>
+        <label className="grid gap-1">Bilet qiyməti<select value={price} onChange={(event) => setPrice(event.target.value)} className="min-h-11 rounded-xl bg-[var(--hara-surface)] px-3"><option value="all">Hamısı</option><option value="free">Ödənişsiz</option><option value="paid">Ödənişli</option></select></label>
+        <div className="flex gap-3"><button type="button" onClick={() => { setCategory(""); setPeriod("all"); setPrice("all"); }} className="min-h-11 flex-1 rounded-xl border border-[#565dd8] px-3">Filterləri sıfırla</button><button type="button" onClick={() => setFilterOpen(false)} className="min-h-11 flex-1 rounded-xl bg-[#565dd8] px-3 text-white">Nəticələri göstər</button></div>
+        <p role="status">{events.length} tədbir tapıldı</p>
+      </section> : null}
 
       <section className="flex flex-col gap-3 py-3" aria-labelledby="featured-heading">
         <h1 id="featured-heading" className="px-4 text-[30px] leading-[37px] font-bold tracking-[0.4px] text-[var(--hara-primary)] min-[360px]:text-[34px] min-[360px]:leading-[41px]">
@@ -407,14 +440,15 @@ export function HaraHome({ loadEvents = eventsApi.list }: { loadEvents?: LoadEve
         ) : null}
       </section>
 
-      <NearbyMapCard count={events.length || 14} />
+      <NearbyMapCard loadEvents={loadEvents} />
 
       <section id="weekly-events" className="flex flex-col gap-3 px-4 py-3" aria-labelledby="weekly-heading">
         <h2 id="weekly-heading" className="text-[20px] leading-[25px] font-semibold tracking-[-0.45px] text-[var(--hara-primary)]">
           Bu həftə nə var?
         </h2>
+        {state.kind === "success" && weeklyEvents.length === 0 ? <p className="py-4 text-sm text-[var(--hara-muted)]">Bu həftə üçün uyğun tədbir yoxdur.</p> : null}
         <div className="flex flex-col gap-3">
-          {events.map((event, index) => (
+          {weeklyEvents.map((event, index) => (
             <EventRow key={event.id} event={event} index={index} />
           ))}
         </div>
